@@ -40,6 +40,7 @@ for (const css of ['app.css', 'bill.css']) {
   const out = await transform(fs.readFileSync(path.join(root, 'public/css', css), 'utf8'), { loader: 'css', minify: true });
   fs.writeFileSync(path.join(dist, 'public/css', css), out.code);
 }
+fs.writeFileSync(path.join(dist, 'public/js/theme-boot.js'), (await transform(fs.readFileSync(path.join(root, 'public/js/theme-boot.js'), 'utf8'), { minify: true })).code);
 fs.writeFileSync(path.join(dist, 'public/index.html'), fs.readFileSync(path.join(root, 'public/index.html'), 'utf8').replace(/\n\s*/g, ''));
 
 // 4. Launcher files.

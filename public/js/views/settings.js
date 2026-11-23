@@ -3,7 +3,7 @@ import { h, icon, toast, errorToast, modal, field, badge, confirmDialog, formVal
 import { get, put, post, del } from '../api.js';
 import { getState, dispatch } from '../store.js';
 import { loadedExtensions } from '../extensions.js';
-import { applyTheme } from '../theme.js';
+import { applyTheme, THEMES, VAR_KEYS, paletteFromImage, paletteFromHue, prepareImage, setImageVars, contrast } from '../theme.js';
 
 export function renderSettings(root) {
   const s = getState().boot.settings;
@@ -19,9 +19,7 @@ export function renderSettings(root) {
       ['label', 'Tax label'], ['rate', 'Default tax rate %', 'Nepal VAT is 13%', null, 'number'], ['inclusive', 'Prices include tax', null, 'toggle'],
       ['serviceChargeRate', 'Service charge %', 'Applied before VAT (restaurants: 10%)', null, 'number'],
     ], s.tax),
-    groupCard('ui', 'Appearance & sound', 'moon', [
-      ['theme', 'Theme', null, ['system', 'light', 'dark']], ['sound', 'Payment chime', null, 'toggle'],
-    ], s.ui, () => applyTheme(getState().boot.settings.ui.theme)),
+    appearanceCard(),
     membershipsCard(),
     groupCard('checkout', 'Checkout & pay later', 'wallet', [
       ['allowPostpone', 'Allow pay later (postponed payments)', null, 'toggle'],
@@ -291,3 +289,146 @@ function membershipsCard() {
     assignBox);
 }
 
+
+// ---------- Appearance: 15 built-in themes + custom themes from your own pictures ----------
+function appearanceCard() {
+  const grid = h('div.theme-grid');
+  const sound = h('input', { type: 'checkbox', checked: getState().boot.settings.ui.sound !== false });
+  sound.addEventListener('change', () => put('/api/settings/ui', { values: { sound: sound.checked } }).catch(errorToast));
+
+  const preview = (attrs, label, extra) => h('div.tt-preview', attrs, h('div.tt-nav', h('i'), h('i'), h('i'), h('i')),
+    h('div.tt-body', h('div.tt-card', h('b'), h('span')), h('div.tt-row', h('i'), h('i'), h('i')), extra || null));
+
+  async function choose(theme, custom) {
+    applyTheme(theme, custom);
+    try {
+      await put('/api/settings/ui', { values: { theme } });
+      dispatch({ type: 'boot', boot: await get('/api/bootstrap') });
+      draw();
+    } catch (e) { errorToast(e); }
+  }
+
+  async function draw() {
+    const current = getState().boot.settings.ui.theme || 'system';
+    let custom = [];
+    try { custom = (await get('/api/themes')).custom; } catch (e) { errorToast(e); }
+    grid.replaceChildren(
+      h(`button.theme-tile${current === 'system' ? '.active' : ''}`, { onclick: () => choose('system') },
+        h('div.tt-preview', { style: { gridTemplateColumns: '1fr 1fr' } }, h('div', { 'data-theme': 'light', style: { background: 'var(--bg)' } }, preview({ 'data-theme': 'light', style: { height: '100%', border: '0', borderRadius: '0' } })), h('div', { 'data-theme': 'dark' }, preview({ 'data-theme': 'dark', style: { height: '100%', border: '0', borderRadius: '0' } }))),
+        h('span.tt-name', 'Match system', current === 'system' ? icon('check', 14) : null)),
+      ...THEMES.map((t) => h(`button.theme-tile${current === t.id ? '.active' : ''}`, { onclick: () => choose(t.id), 'aria-pressed': current === t.id },
+        preview({ 'data-theme': t.id }), h('span.tt-name', t.label, current === t.id ? icon('check', 14) : null))),
+      ...custom.map((t) => {
+        const id = `custom:${t.id}`;
+        const vars = Object.fromEntries(VAR_KEYS.map((k) => [`--${k}`, t.vars[k]]));
+        const pv = preview({ style: vars });
+        if (t.hasImage) pv.style.backgroundImage = `linear-gradient(color-mix(in srgb, ${t.vars.bg} ${100 - t.imageStrength}%, transparent), color-mix(in srgb, ${t.vars.bg} ${100 - t.imageStrength}%, transparent)), url("/api/themes/${t.id}/image")`;
+        return h(`div.theme-tile${current === id ? '.active' : ''}`, { role: 'button', tabIndex: 0, onclick: () => choose(id, t), onkeydown: (e) => { if (e.key === 'Enter') choose(id, t); } },
+          pv, h('span.tt-name', h('span', t.hasImage ? '🖼 ' : '🎨 ', t.name),
+            h('span.tt-actions',
+              h('button.icon-btn.sm', { 'aria-label': `Edit ${t.name}`, onclick: (e) => { e.stopPropagation(); themeBuilder(t, draw, choose); } }, icon('edit', 14)),
+              h('button.icon-btn.sm', { 'aria-label': `Delete ${t.name}`, onclick: async (e) => {
+                e.stopPropagation();
+                if (!(await confirmDialog(`Delete theme "${t.name}"?`, { danger: true, okLabel: 'Delete' }))) return;
+                await del(`/api/themes/${t.id}`);
+                if (current === id) applyTheme('system');
+                dispatch({ type: 'boot', boot: await get('/api/bootstrap') }); draw();
+              } }, icon('trash', 14)))));
+      }),
+      h('button.theme-tile.add', { onclick: () => themeBuilder(null, draw, choose) }, icon('plus', 22), 'Create from picture'));
+  }
+  draw();
+  return h('section.card.span2',
+    h('header.card-head', h('h3', icon('moon', 18), 'Appearance'), h('label.toggle', sound, h('span.track'), h('span', 'Payment chime'))),
+    h('p.hint', 'Pick one of 15 themes, or create your own from a picture — the POS reads its colours, picks a readable accent, and can show the picture behind the screens.'),
+    grid);
+}
+
+function themeBuilder(existing, done, choose) {
+  let vars = existing ? { ...existing.vars } : paletteFromHue(170, 0.7, 'light');
+  let mode = existing?.mode || 'light';
+  let image = existing?.hasImage ? `/api/themes/${existing.id}/image` : null; // display URL
+  let upload;          // new data URL to send (undefined = keep, null = remove)
+  let img = null;      // decoded picture for re-analysis
+  let strength = existing?.imageStrength ?? 25;
+  let hue = null;
+
+  const name = h('input.input', { value: existing?.name || '', placeholder: 'e.g. My shop front' });
+  const file = h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp' });
+  const modeSel = h('select.input', ['auto', 'light', 'dark'].map((m) => h('option', { value: m, selected: existing ? m === mode : m === 'auto' }, m === 'auto' ? 'Auto (from picture)' : m)));
+  const useBg = h('input', { type: 'checkbox', checked: !!image });
+  const slider = h('input', { type: 'range', min: 0, max: 80, value: strength, 'aria-label': 'Picture strength' });
+  const accentIn = h('input', { type: 'color', value: vars.accent });
+  const big = h('div.tt-preview.photo-preview', { style: { height: '200px', gridTemplateColumns: '18% 1fr' } },
+    h('div.tt-nav', h('i'), h('i'), h('i'), h('i'), h('i')),
+    h('div.tt-body', h('div.tt-card', h('b'), h('span')), h('div.tt-card', h('b'), h('span')), h('div.tt-row', h('i'), h('i'), h('i'), h('i')),
+      h('div', { style: { display: 'flex', gap: '6px' } }, h('span.btn.sm.primary', 'Charge'), h('span.btn.sm', 'Discount'), h('span.badge.ok', 'Paid'))));
+  const advanced = h('div.palette-row');
+  const warn = h('small.hint');
+
+  const regenerate = () => {
+    const m = modeSel.value === 'auto' ? undefined : modeSel.value;
+    if (hue !== null) { mode = m || mode; vars = paletteFromHue(hue.h, hue.s, mode); }
+    else if (img) { const p = paletteFromImage(img, m); mode = p.mode; vars = p.vars; }
+    else { mode = m || 'light'; vars = paletteFromHue(170, 0.7, mode); }
+    accentIn.value = vars.accent;
+    paint();
+  };
+  const paint = () => {
+    for (const k of VAR_KEYS) big.style.setProperty(`--${k}`, vars[k]);
+    big.style.backgroundImage = image && useBg.checked
+      ? `linear-gradient(color-mix(in srgb, ${vars.bg} ${100 - slider.value}%, transparent), color-mix(in srgb, ${vars.bg} ${100 - slider.value}%, transparent)), url("${image}")` : '';
+    advanced.replaceChildren(...VAR_KEYS.map((k) => {
+      const inp = h('input', { type: 'color', value: vars[k], 'aria-label': k });
+      inp.addEventListener('input', () => { vars[k] = inp.value; hue = null; paint(); });
+      return h('label', inp, k);
+    }));
+    const c = contrast(vars.text, vars.bg), a = contrast(vars['accent-ink'], vars.accent);
+    warn.textContent = c < 4.5 || a < 4.5 ? `⚠ Low contrast (text ${c.toFixed(1)}:1, buttons ${a.toFixed(1)}:1) — aim for 4.5:1 or more.` : `Contrast OK (text ${c.toFixed(1)}:1, buttons ${a.toFixed(1)}:1).`;
+  };
+
+  file.addEventListener('change', async () => {
+    const f = file.files[0];
+    if (!f) return;
+    try {
+      const p = await prepareImage(f);
+      upload = p.dataUrl; image = p.dataUrl; img = p.canvas; hue = null; useBg.checked = true;
+      if (!name.value) name.value = f.name.replace(/\.[^.]+$/, '').slice(0, 40);
+      regenerate();
+    } catch (e) { errorToast(e); }
+  });
+  modeSel.addEventListener('change', regenerate);
+  slider.addEventListener('input', paint);
+  useBg.addEventListener('change', paint);
+  accentIn.addEventListener('input', () => {
+    const hex = accentIn.value; const r = parseInt(hex.slice(1, 3), 16) / 255, g = parseInt(hex.slice(3, 5), 16) / 255, b = parseInt(hex.slice(5, 7), 16) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min, l = (max + min) / 2;
+    const s2 = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+    const hh = d === 0 ? 0 : max === r ? 60 * (((g - b) / d) % 6) : max === g ? 60 * ((b - r) / d + 2) : 60 * ((r - g) / d + 4);
+    hue = { h: (hh + 360) % 360, s: Math.max(0.35, s2) }; regenerate();
+  });
+  paint();
+
+  modal({
+    title: existing ? `Edit theme · ${existing.name}` : 'Create a theme from your picture', wide: true,
+    body: h('div.form-grid',
+      big,
+      h('div.form-grid.two', field('Picture', file, 'JPEG/PNG/WebP. Resized on this PC; location data is removed.'), field('Theme name', name)),
+      h('div.form-grid.two', field('Light or dark', modeSel), field('Accent colour', accentIn, 'Pick one to rebuild the palette around it')),
+      h('div.form-grid.two', h('label.toggle', useBg, h('span.track'), h('span', 'Show the picture as background')), field('Picture strength', slider)),
+      warn,
+      h('details', h('summary', 'Fine-tune every colour'), advanced)),
+    actions: [
+      { label: 'Cancel', onClick: (c) => c() },
+      { label: existing ? 'Save & use' : 'Create & use', primary: true, onClick: async (c) => {
+        if (!name.value.trim()) return toast('Give the theme a name', 'warn');
+        const body = { name: name.value, mode, vars, imageStrength: Number(slider.value) };
+        if (!useBg.checked) body.image = null; else if (upload !== undefined) body.image = upload;
+        try {
+          const t = existing ? await put(`/api/themes/${existing.id}`, body) : await post('/api/themes', body);
+          c(); toast('Theme saved', 'success');
+          await choose(`custom:${t.id}`, t); done();
+        } catch (e) { errorToast(e); }
+      } }],
+  });
+}

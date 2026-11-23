@@ -22,7 +22,6 @@ let cleanup = null;
 const app = document.getElementById('app');
 
 async function start() {
-  try { applyTheme(localStorage.getItem('pos.theme') || 'system'); } catch { /* ignore */ }
   consoleNotice();
   const auth = await get('/api/auth/state');
   if (auth.setupRequired) return renderSetup();
@@ -30,7 +29,7 @@ async function start() {
   setPinPrompt(askPin);
   const boot = await get('/api/bootstrap');
   dispatch({ type: 'boot', boot });
-  applyTheme(boot.settings.ui.theme);
+  applyTheme(boot.settings.ui.theme, boot.customTheme);
   loadExtensions(boot.extensions);
   await loadItems();
   dispatch({ type: 'notifications', list: await get('/api/notifications') });

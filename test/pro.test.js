@@ -124,3 +124,20 @@ test('default tier for new customers and setting tier from settings', async () =
   assert.equal(none.membership, null);
   setGroup('memberships', { defaultPlanId: 0 });
 });
+
+test('themes: built-in choice and custom themes from pictures, validated', async () => {
+  const vars = { bg: '#f5f5f5', surface: '#ffffff', 'surface-2': '#fafafa', border: '#dddddd', text: '#111111', muted: '#555555', accent: '#0055aa', 'accent-ink': '#ffffff', 'accent-soft': '#ddeeff', 'accent-strong': '#003366', 'nav-bg': '#112233', 'nav-text': '#aabbcc', 'nav-active-bg': '#223344' };
+  assert.equal((await call('PUT', '/api/settings/ui', { values: { theme: 'ocean' } })).status, 200); // no PIN needed
+  assert.equal((await call('PUT', '/api/settings/ui', { values: { theme: 'not-a-theme' } })).status, 400);
+  assert.equal((await call('POST', '/api/themes', { name: 'Bad', mode: 'light', vars: { ...vars, accent: 'red;}body{display:none' } })).status, 400);
+  const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+  assert.equal((await call('POST', '/api/themes', { name: 'Fake', mode: 'light', vars, image: `data:image/jpeg;base64,${png}` })).status, 400); // PNG bytes labelled JPEG
+  const t = await ok('POST', '/api/themes', { name: 'Shop photo', mode: 'light', vars, image: `data:image/png;base64,${png}`, imageStrength: 30 });
+  assert.equal(t.hasImage, true);
+  const img = await fetch(`${B}/api/themes/${t.id}/image`, { headers: { Cookie: COOKIE } });
+  assert.equal(img.headers.get('content-type'), 'image/png');
+  await ok('PUT', '/api/settings/ui', { values: { theme: `custom:${t.id}` } });
+  assert.equal((await ok('GET', '/api/bootstrap')).customTheme.name, 'Shop photo');
+  await ok('DELETE', `/api/themes/${t.id}`);
+  assert.equal((await ok('GET', '/api/settings')).ui.theme, 'system'); // falls back when the active theme is deleted
+});

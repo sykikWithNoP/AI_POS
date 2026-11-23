@@ -24,6 +24,7 @@ import * as customers from '../services/customers.js';
 import * as memberships from '../services/memberships.js';
 import * as shifts from '../services/shifts.js';
 import * as refunds from '../services/refunds.js';
+import * as themes from '../services/themes.js';
 import * as calendar from '../services/calendar.js';
 import * as stripe from '../providers/stripe.js';
 import { sendTelegram } from '../notifiers.js';
@@ -65,6 +66,7 @@ export function apiRouter() {
     extensions: exts.verifiedEnabledExtensions().map((e) => ({ id: e.id, name: e.name, code: e.code })),
     google: { connected: calendar.isConnected() },
     plans: memberships.listPlans(),
+    customTheme: (() => { const t = settings.getGroup('ui').theme; try { return t.startsWith('custom:') ? themes.getTheme(t.slice(7)) : null; } catch { return null; } })(),
     shift: shifts.currentShift(),
     baseUrl: baseUrl(req),
   }));
@@ -164,6 +166,29 @@ export function apiRouter() {
 
   // ---------- settings & connectors ----------
   r.get('/settings', owner, (req, res) => res.json(settings.publicSettings()));
+  // Appearance is personal, not a business rule: no PIN needed.
+  r.put('/settings/ui', owner, (req, res) => {
+    const v = req.body?.values || {};
+    if (v.theme !== undefined && !themes.isValidTheme(v.theme)) throw badRequest('Unknown theme');
+    const theme = String(v.theme ?? '');
+    if (theme.startsWith('custom:')) themes.getTheme(theme.slice(7));
+    const patch = {};
+    if (v.theme !== undefined) patch.theme = v.theme;
+    if (v.sound !== undefined) patch.sound = v.sound;
+    settings.setGroup('ui', patch);
+    res.json(settings.publicGroup('ui'));
+  });
+  r.get('/themes', owner, (req, res) => res.json({ builtIn: themes.BUILT_IN, custom: themes.listThemes() }));
+  r.post('/themes', owner, (req, res) => res.status(201).json(themes.createTheme(req.body || {})));
+  r.put('/themes/:id', owner, (req, res) => res.json(themes.updateTheme(req.params.id, req.body || {})));
+  r.delete('/themes/:id', owner, (req, res) => {
+    if (settings.getGroup('ui').theme === `custom:${Number(req.params.id)}`) settings.setGroup('ui', { theme: 'system' });
+    res.json(themes.deleteTheme(req.params.id));
+  });
+  r.get('/themes/:id/image', owner, (req, res) => {
+    const img = themes.getThemeImage(req.params.id);
+    res.set({ 'Content-Type': img.type, 'Cache-Control': 'private, max-age=86400' }).send(img.data);
+  });
   r.put('/settings/:group', pin, (req, res) => {
     const { group } = req.params;
     if (!(group in settings.DEFAULTS)) throw badRequest('Unknown settings group');

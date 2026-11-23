@@ -49,6 +49,15 @@ Requires Node.js 22.5 or newer (it uses the built-in `node:sqlite`, so there are
 - Strip with **Today / This month / This year** at a glance, then a detailed view of each (with ← → to go back in time). Months and years can be AD or Bikram Sambat (Settings → Business).
 - Net revenue after refunds vs the previous period, bills, average bill, VAT, estimated gross profit, pay-later outstanding/overdue, a revenue chart (hour/day/month), payment mix, top items, busy hours, stock alerts, IRD status, Google Calendar events, and a searchable bill list with void, refund, collect, print and copy-link actions. CSV export.
 
+### Themes
+Settings → Appearance has **15 built-in themes**:
+- Light: Classic Light, Ocean, Forest, Sunset, Rose, Lavender, Slate, Sand, Arctic, Saffron, High Contrast
+- Dark: Classic Dark, Midnight, Mocha, Neon
+
+There's also "Match system", which follows your computer's light/dark setting. Every tile is a live preview, and changing the theme doesn't need the PIN.
+
+**Create from picture:** upload a photo (for example, your shop front). The POS reads its colours, chooses light or dark mode, and picks an accent that passes readability contrast checks. It can also show the photo behind the screens, with a strength slider. You can rebuild the palette from any accent colour or fine-tune all 13 colours, with a live contrast check. Pictures are resized and re-encoded on your PC, which strips metadata such as GPS location. The server re-checks each picture's real file type and size, and accepts colours only as hex values.
+
 ### Connectors (bring your own keys)
 eSewa · Khalti · Stripe · Fonepay/Bank QR · Card terminal · Payment notification webhook · IRD CBMS · Google Calendar (your own OAuth client; day-close summaries, optional event per sale) · AI Copilot (your Anthropic key) · Telegram alerts · **POS API keys** (scoped read/write Bearer tokens for your own apps) · **Outbound webhooks** (HMAC-signed events to your URLs).
 

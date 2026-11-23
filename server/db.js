@@ -197,6 +197,17 @@ CREATE TABLE IF NOT EXISTS refunds (
 );
 CREATE INDEX IF NOT EXISTS idx_refunds_sale ON refunds(sale_id);
 
+CREATE TABLE IF NOT EXISTS themes (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  name        TEXT NOT NULL CHECK (length(name) > 0),
+  mode        TEXT NOT NULL CHECK (mode IN ('light','dark')),
+  vars        TEXT NOT NULL,
+  image       BLOB,
+  image_type  TEXT,
+  image_strength INTEGER NOT NULL DEFAULT 25,
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
 CREATE TABLE IF NOT EXISTS notifications (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   type        TEXT NOT NULL,
