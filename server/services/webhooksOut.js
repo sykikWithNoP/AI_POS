@@ -1,6 +1,7 @@
 // Outbound webhooks: POS events -> your URLs, signed with HMAC-SHA256 (X-POS-Signature).
 import { db } from '../db.js';
 import { badRequest, notFound, randomToken, hmacHex, log } from '../lib.js';
+import { egressFetch } from '../security/egress.js';
 
 export const EVENTS = ['sale.created', 'sale.paid', 'sale.void', 'payment.verified', 'payment.failed', 'item.created', 'item.updated', 'item.deleted'];
 
@@ -12,7 +13,7 @@ export function listHooks() {
 export function createHook({ url, events }) {
   let u;
   try { u = new URL(url); } catch { throw badRequest('Invalid URL'); }
-  if (!['http:', 'https:'].includes(u.protocol)) throw badRequest('URL must be http(s)');
+  if (u.protocol !== 'https:' && !(u.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname))) throw badRequest('Webhook URLs must use https (http only to this computer)');
   const ev = (events || []).filter((e) => EVENTS.includes(e));
   if (!ev.length) throw badRequest('Pick at least one event');
   const secret = `whsec_${randomToken(24)}`;
@@ -33,7 +34,8 @@ export async function dispatch(evt) {
     const body = JSON.stringify({ id: randomToken(8), type: evt.type, created_at: evt.at, data: evt.payload });
     let status;
     try {
-      const res = await fetch(h.url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-POS-Event': evt.type, 'X-POS-Signature': hmacHex(h.secret, body) }, body, signal: AbortSignal.timeout(8000) });
+      const res = await egressFetch(h.url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-POS-Event': evt.type, 'X-POS-Signature': hmacHex(h.secret, body) }, body, signal: AbortSignal.timeout(8000) },
+        { purpose: 'webhook', extraHosts: [new URL(h.url).hostname] });
       status = `${res.status} @ ${evt.at}`;
     } catch (e) {
       status = `error: ${e.message}`;

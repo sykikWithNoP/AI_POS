@@ -448,3 +448,12 @@ ol.rank { counter-reset: r; } ol.rank li::before { counter-increment: r; content
 .palette-row label { display: grid; gap: 3px; font-size: 11px; color: var(--muted); justify-items: center; }
 .palette-row input[type=color] { width: 44px; height: 32px; padding: 2px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
 .photo-preview { border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+
+.image-input { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.image-input img { width: 56px; height: 56px; object-fit: contain; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+.image-input img[hidden] { display: none; }
+.egress-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 13px; max-height: 260px; overflow: auto; }
+.egress-list li { display: grid; grid-template-columns: 150px 1fr 120px 90px; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--border); }
+.egress-list code { font: 12px var(--mono); overflow-wrap: anywhere; }
+@media (max-width: 760px) { .egress-list li { grid-template-columns: 1fr 1fr; } }
+.egress-list li.muted { display: block; }

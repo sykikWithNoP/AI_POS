@@ -74,9 +74,13 @@ export function decrypt(blob) {
   return Buffer.concat([d.update(Buffer.from(data, 'base64')), d.final()]).toString('utf8');
 }
 
-/** fetch with a timeout; returns { ok, status, json, text }. Never throws on HTTP status. */
-export async function httpJson(url, { method = 'GET', headers = {}, body, timeoutMs = 15000 } = {}) {
-  const res = await fetch(url, { method, headers, body, signal: AbortSignal.timeout(timeoutMs) });
+/**
+ * Outbound HTTP through the egress gate (allowlist, key pinning, no fingerprinting).
+ * Returns { ok, status, json, text }; never throws on HTTP status.
+ */
+export async function httpJson(url, { method = 'GET', headers = {}, body, timeoutMs = 15000, purpose } = {}) {
+  const { egressFetch } = await import('./security/egress.js');
+  const res = await egressFetch(url, { method, headers, body, signal: AbortSignal.timeout(timeoutMs) }, { purpose: purpose || new URL(url).hostname });
   const text = await res.text();
   let json = null;
   try { json = text ? JSON.parse(text) : null; } catch { /* not JSON */ }

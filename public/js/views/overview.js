@@ -100,7 +100,7 @@ function calendarCard() {
     }
     try {
       const ev = await get('/api/google/events?days=14');
-      content.replaceChildren(ev.length ? h('ul.events', ev.map((e) => h('li', h('time', fmtDate(e.start, e.start.length === 10 ? { dateStyle: 'medium' } : { dateStyle: 'medium', timeStyle: 'short' })), h('a', { href: e.link, target: '_blank', rel: 'noopener' }, e.summary || '(no title)')))) : empty('Nothing in the next 14 days', 'calendar'));
+      content.replaceChildren(ev.length ? h('ul.events', ev.map((e) => h('li', h('time', fmtDate(e.start, e.start.length === 10 ? { dateStyle: 'medium' } : { dateStyle: 'medium', timeStyle: 'short' })), h('a', { href: e.link, target: '_blank', rel: 'noopener noreferrer' }, e.summary || '(no title)')))) : empty('Nothing in the next 14 days', 'calendar'));
     } catch (e) { content.replaceChildren(h('p.danger-text', e.message)); }
   };
   fill();

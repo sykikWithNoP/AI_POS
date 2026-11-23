@@ -2,6 +2,7 @@
 import { h, icon, toast, errorToast, modal, field, badge, confirmDialog, fmtDate } from '../ui.js';
 import { get, put, post, del } from '../api.js';
 import { getState, dispatch } from '../store.js';
+import { imageInput } from '../ui.js';
 
 const SPECS = [
   { group: 'esewa', title: 'eSewa', icon: 'wallet', section: 'Payments', desc: 'ePay v2 checkout. Sandbox works out of the box with eSewa\'s public test merchant.',
@@ -14,7 +15,7 @@ const SPECS = [
       { name: 'webhookSecret', type: 'secret', label: 'Webhook signing secret (whsec_…)', hint: 'Only if you expose the POS via a tunnel: POST /api/webhooks/stripe' },
       { name: 'currency', label: 'Charge currency', hint: 'e.g. usd, eur, npr' }, { name: 'fxRate', type: 'number', label: 'Exchange rate', hint: 'Multiply bill amount by this to get the Stripe amount (1 if same currency)' }], test: true },
   { group: 'qr', title: 'Fonepay / Bank QR', icon: 'qr', section: 'Payments', desc: 'Show your static merchant QR at checkout. Confirm manually, or automatically via the signed webhook below.',
-    fields: [{ name: 'enabled', type: 'toggle', label: 'Enabled' }, { name: 'label', label: 'Button label' }, { name: 'payload', label: 'QR text (decoded from your merchant QR)' }, { name: 'imageUrl', label: 'Or an image URL / data: URL of the QR' }] },
+    fields: [{ name: 'enabled', type: 'toggle', label: 'Enabled' }, { name: 'label', label: 'Button label' }, { name: 'payload', label: 'QR text (decoded from your merchant QR)' }, { name: 'imageUrl', type: 'image', label: 'Or upload the QR picture' }] },
   { group: 'card', title: 'Card terminal', icon: 'receipt', section: 'Payments', desc: 'Record card payments taken on a separate terminal.',
     fields: [{ name: 'enabled', type: 'toggle', label: 'Enabled' }, { name: 'label', label: 'Button label' }] },
   { group: 'genericWebhook', title: 'Payment notification webhook', icon: 'bell', section: 'Payments', desc: 'Any service (bank SMS forwarder, Zapier, n8n, your own script) can confirm a payment by POSTing a signed JSON body.',
@@ -55,6 +56,7 @@ function connectorCard(spec, cfg) {
     if (f.type === 'toggle') { el = h('input', { type: 'checkbox', checked: !!cfg[f.name] }); form.append(h('label.toggle', el, h('span.track'), h('span', f.label))); }
     else {
       if (f.type === 'select') el = h('select.input', f.options.map((o) => h('option', { value: o, selected: cfg[f.name] === o }, o)));
+      else if (f.type === 'image') el = imageInput(cfg[f.name]);
       else if (f.type === 'secret') el = h('input.input', { type: 'password', autocomplete: 'off', placeholder: cfg[`${f.name}Set`] ? "Saved (hidden) — type to replace" : 'Not set' });
       else el = h('input.input', { type: f.type === 'number' ? 'number' : 'text', step: 'any', value: cfg[f.name] ?? '' });
       form.append(field(f.label, el, f.hint));
@@ -65,7 +67,7 @@ function connectorCard(spec, cfg) {
   const setStatus = (c) => status.replaceChildren(isOn(spec, c) ? badge('On', 'ok') : badge('Off'));
   setStatus(cfg);
   const save = async () => {
-    const values = Object.fromEntries(Object.entries(inputs).map(([k, el]) => [k, el.type === 'checkbox' ? el.checked : el.value]));
+    const values = Object.fromEntries(Object.entries(inputs).map(([k, el]) => [k, el.type === 'checkbox' ? el.checked : el.dataset.image !== undefined ? el.dataset.image : el.value]));
     try {
       const updated = await put(`/api/settings/${spec.group}`, { values });
       const boot = await get('/api/bootstrap');

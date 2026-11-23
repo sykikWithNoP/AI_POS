@@ -1,5 +1,5 @@
 // Settings: business profile, tax, appearance, security, extensions (+ AI builder), backup.
-import { h, icon, toast, errorToast, modal, field, badge, confirmDialog, formValues, money, toMajor, debounce, empty } from '../ui.js';
+import { h, icon, toast, errorToast, modal, field, badge, confirmDialog, formValues, money, toMajor, debounce, empty, imageInput } from '../ui.js';
 import { get, put, post, del } from '../api.js';
 import { getState, dispatch } from '../store.js';
 import { loadedExtensions } from '../extensions.js';
@@ -10,7 +10,7 @@ export function renderSettings(root) {
   root.replaceChildren(h('div.settings',
     groupCard('business', 'Business profile', 'receipt', [
       ['name', 'Shop name'], ['address', 'Address'], ['phone', 'Phone'], ['email', 'Email'], ['pan', 'PAN / VAT number', 'Printed on tax invoices'],
-      ['logoUrl', 'Logo URL'], ['currency', 'Currency code'], ['currencySymbol', 'Currency symbol'], ['locale', 'Number locale', 'e.g. en-IN, ne-NP, en-US'],
+      ['logoUrl', 'Logo (stored on this PC)', null, 'image'], ['currency', 'Currency code'], ['currencySymbol', 'Currency symbol'], ['locale', 'Number locale', 'e.g. en-IN, ne-NP, en-US'],
       ['invoicePrefix', 'Invoice prefix'], ['receiptFooter', 'Receipt footer'],
       ['calendar', 'Month view calendar', null, ['AD', 'BS']],
       ['publicUrl', 'Public URL (optional)', 'Only if you expose the POS via a tunnel/LAN — used for bill links, QR codes and webhooks'],
@@ -39,6 +39,7 @@ export function renderSettings(root) {
     ], s.shifts),
     securityCard(),
     integrityCard(),
+    privacyCard(),
     extensionsCard(),
     backupCard()));
 }
@@ -47,6 +48,7 @@ function groupCard(group, title, ic, fields, values, after) {
   const form = h('form.form-grid.two', { onsubmit: (e) => e.preventDefault() });
   for (const [name, label, hint, opts, type] of fields) {
     if (opts === 'toggle') { form.append(h('label.toggle', h('input', { type: 'checkbox', name, checked: !!values[name] }), h('span.track'), h('span', label))); continue; }
+    if (opts === 'image') { const el = imageInput(values[name]); el.dataset.name = name; form.append(field(label, el, hint)); continue; }
     const el = Array.isArray(opts)
       ? h('select.input', { name }, opts.map((o) => h('option', { value: o, selected: values[name] === o }, o)))
       : h('input.input', { name, type: type || 'text', step: 'any', value: values[name] ?? '' });
@@ -57,7 +59,9 @@ function groupCard(group, title, ic, fields, values, after) {
     form,
     h('footer.conn-actions', h('button.btn.primary', { onclick: async () => {
       try {
-        await put(`/api/settings/${group}`, { values: formValues(form) });
+        const values = formValues(form);
+        for (const el of form.querySelectorAll('.image-input')) values[el.dataset.name] = el.dataset.image;
+        await put(`/api/settings/${group}`, { values });
         dispatch({ type: 'boot', boot: await get('/api/bootstrap') });
         after?.();
         toast('Saved', 'success');
@@ -431,4 +435,41 @@ function themeBuilder(existing, done, choose) {
         } catch (e) { errorToast(e); }
       } }],
   });
+}
+
+// ---------- Privacy: what may leave this PC, and what actually did ----------
+const WHAT_LEAVES = {
+  esewa: 'bill number and amount (to verify the payment)',
+  khalti: 'bill number, amount, and the customer name/phone if entered',
+  stripe: 'bill number and amount',
+  ird: 'invoice totals, your PAN and the buyer PAN (legal requirement)',
+  google: 'event titles and dates you create',
+  ai: 'your questions plus this month\'s sales totals and item list (no customer details, no keys)',
+  telegram: 'bill number, amount and payment method',
+};
+function privacyCard() {
+  const off = h('input', { type: 'checkbox' });
+  const allowed = h('ul.rank');
+  const log = h('ul.egress-list');
+  const load = async () => {
+    try {
+      const r = await get('/api/privacy/egress');
+      off.checked = r.offline;
+      const byConn = {};
+      for (const d of r.allowed) (byConn[d.connector] ||= []).push(d.host);
+      allowed.replaceChildren(...(Object.keys(byConn).length ? Object.entries(byConn).map(([c, hosts]) => h('li', h('b', c), h('small.muted', ` ${hosts.join(', ')}`), h('small', { style: { marginLeft: 'auto', textAlign: 'right' } }, WHAT_LEAVES[c] || ''))) : [h('li.muted', 'Nothing — no connector is switched on, so nothing leaves this computer.')]));
+      log.replaceChildren(...(r.recent.length ? r.recent.slice(0, 60).map((e) => h('li', h('time', new Date(e.at).toLocaleTimeString()), h('code', e.host), h('span', e.purpose), e.blocked ? badge('blocked', 'bad') : e.error ? badge(e.error, 'warn') : badge(String(e.status), e.status < 400 ? 'ok' : 'warn'))) : [h('li.muted', 'No outbound connections since the POS started.')]));
+    } catch (e) { errorToast(e); }
+  };
+  off.addEventListener('change', async () => {
+    try { await put('/api/settings/privacy', { values: { offline: off.checked } }); toast(off.checked ? 'Offline: nothing can leave this computer' : 'Online: enabled connectors may connect', 'success'); load(); }
+    catch (e) { off.checked = !off.checked; errorToast(e); }
+  });
+  load();
+  return h('section.card.span2',
+    h('header.card-head', h('h3', icon('shield', 18), 'Privacy — what leaves this PC'), h('button.btn.sm', { onclick: load }, icon('refresh', 14), 'Refresh')),
+    h('p.hint', 'The server only connects to services you switched on, over HTTPS, without revealing anything about this computer (no OS, device or software details, no referrer). Each saved key can only be sent to its own provider; a key headed anywhere else — or a POS API key leaving at all — is blocked and logged. The screen never loads anything from other websites.'),
+    h('label.toggle', off, h('span.track'), h('span', h('b', 'Offline mode'), ' — block every outbound connection (cash/card/QR selling keeps working)')),
+    h('h4', 'Allowed destinations and what is sent'), allowed,
+    h('h4', 'Outbound activity (since start)'), log);
 }

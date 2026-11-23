@@ -117,3 +117,31 @@ export function formValues(form) {
 }
 export function badge(text, kind = '') { return h(`span.badge${kind ? '.' + kind : ''}`, text); }
 export function empty(text, iconName = 'box') { return h('div.empty', icon(iconName, 32), h('p', text)); }
+
+/**
+ * Picture picker that keeps the picture on this PC: re-encoded to a small PNG/JPEG data URL
+ * (strips metadata). The value is in el.dataset.image ('' = none).
+ */
+export function imageInput(current = '', { max = 512 } = {}) {
+  const wrap = h('div.image-input');
+  wrap.dataset.image = current || '';
+  const prev = h('img', { alt: '', hidden: !current, src: current || undefined });
+  const file = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp' });
+  const clear = h('button.btn.sm', { type: 'button', hidden: !current, onclick: () => { wrap.dataset.image = ''; prev.hidden = true; clear.hidden = true; file.value = ''; } }, 'Remove');
+  file.addEventListener('change', async () => {
+    const f = file.files[0];
+    if (!f) return;
+    try {
+      const bmp = await createImageBitmap(f);
+      const scale = Math.min(1, max / Math.max(bmp.width, bmp.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
+      c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+      let url = c.toDataURL('image/png');
+      if (url.length > 600_000) url = c.toDataURL('image/jpeg', 0.85);
+      wrap.dataset.image = url; prev.src = url; prev.hidden = false; clear.hidden = false;
+    } catch { toast('Could not read that picture', 'error'); }
+  });
+  wrap.append(prev, file, clear);
+  return wrap;
+}

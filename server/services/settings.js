@@ -34,6 +34,7 @@ export const DEFAULTS = {
   shifts: { required: false },
   checkout: { allowPostpone: false, postponeRequiresCustomer: true, defaultDueDays: 7, maxDiscountPercent: 20 },
   memberships: { defaultPlanId: 0 },
+  privacy: { offline: false },
 };
 
 export const SECRET_FIELDS = {

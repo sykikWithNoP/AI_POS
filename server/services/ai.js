@@ -6,6 +6,7 @@ import { getGroup } from './settings.js';
 import { monthOverview } from './overview.js';
 import { listItems } from './items.js';
 import { formatMoney } from '../../shared/billing.js';
+import { egressFetch } from '../security/egress.js';
 import { screenPrompt, scrubOutput, scanExtension, AI_POLICY } from '../security/guard.js';
 
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
@@ -13,7 +14,10 @@ const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 function client() {
   const cfg = getGroup('ai');
   if (!cfg.apiKey) throw badRequest('Add your Anthropic API key in Connectors → AI Copilot');
-  return { anthropic: new Anthropic({ apiKey: cfg.apiKey, maxRetries: 2 }), cfg };
+  // All traffic goes through the egress gate: the key is pinned to api.anthropic.com and the SDK's
+  // platform headers (OS, CPU architecture, runtime version) are stripped before anything leaves.
+  const fetchVia = (url, init) => egressFetch(url, init, { purpose: 'ai' });
+  return { anthropic: new Anthropic({ apiKey: cfg.apiKey, maxRetries: 2, fetch: fetchVia }), cfg };
 }
 
 async function call(params) {

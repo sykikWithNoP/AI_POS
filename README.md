@@ -111,6 +111,14 @@ Five wrong PINs lock it out with growing delays, and every attempt is logged. AP
 
 **AI prompt layer.** Copilot and feature-builder requests are screened. Attempts to extract keys, PINs, the system prompt or source code, to reverse-engineer the app, to jailbreak, or to bypass tax, IRD, PIN or ledger rules are refused and logged. The model runs under a fixed policy, shop data is passed as untrusted `<shop_data>`, and any configured secret or key-shaped string is scrubbed from replies. Generated extension code goes through the same scanner.
 
+**Privacy: nothing about this PC leaves it.**
+- **One outbound gate.** All internet traffic from the server goes through a single egress gate. It only reaches services you have switched on, uses HTTPS, refuses redirects, and has an **Offline mode** switch that blocks everything.
+- **No fingerprint.** The gate strips identifying headers: the AI library's OS, CPU, runtime and version headers, the runtime User-Agent, Referer and forwarding headers. Requests carry only a generic User-Agent.
+- **Key pinning.** Each saved key can only travel to its own provider: Anthropic key → `api.anthropic.com`, Stripe → `api.stripe.com`, and so on. A key headed to any other host, or a POS API key leaving at all, is blocked and recorded in the signed ledger.
+- **No third-party loads in the browser.** CSP `connect-src 'self'` and `img-src 'self' data: blob:` mean the browser loads nothing from other sites. Logos and QR pictures are uploaded and stored locally; external image links are refused. `Referrer-Policy: no-referrer` stops local URLs leaking through links.
+- **You can see it.** Settings → Privacy lists each allowed destination, what is sent there, and every outbound connection since start (destination and purpose, never content).
+- **What it can't hide.** Any service you connect to necessarily sees your internet IP address. In the browser, Google sign-in and the eSewa payment page see what any website sees. Use a VPN if that matters.
+
 **Hardening.** The strict Content-Security-Policy uses nonces for the few inline scripts. Other protections:
 - `X-Robots-Tag`/meta `noindex, noai`
 - no source maps

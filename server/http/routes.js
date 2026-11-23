@@ -25,6 +25,7 @@ import * as memberships from '../services/memberships.js';
 import * as shifts from '../services/shifts.js';
 import * as refunds from '../services/refunds.js';
 import * as themes from '../services/themes.js';
+import { allowedDestinations, egressActivity } from '../security/egress.js';
 import * as calendar from '../services/calendar.js';
 import * as stripe from '../providers/stripe.js';
 import { sendTelegram } from '../notifiers.js';
@@ -195,6 +196,14 @@ export function apiRouter() {
     let values = req.body?.values || {};
     // The PIN itself only changes through /auth/pin (which checks the current PIN).
     if (group === 'security') values = { lockScreen: values.lockScreen, elevateMinutes: values.elevateMinutes };
+    // Images are stored on this PC only (data URLs). External image links would make the browser
+    // contact third-party servers and reveal this PC's IP and browser details.
+    for (const f of ['logoUrl', 'imageUrl']) {
+      const v = values[f];
+      if (v === undefined || v === '') continue;
+      if (!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(String(v))) throw badRequest('Upload the picture instead of linking to it; external image links are blocked for privacy');
+      if (String(v).length > 700_000) throw badRequest('Picture is too large (max ~500 KB)');
+    }
     settings.setGroup(group, values, { clearSecrets: group === 'security' ? [] : req.body?.clearSecrets || [] });
     res.json(settings.publicGroup(group));
   });
@@ -264,6 +273,9 @@ export function apiRouter() {
       start: d.date, allDay: true,
     }));
   });
+
+  // ---------- privacy ----------
+  r.get('/privacy/egress', owner, (req, res) => res.json({ offline: settings.getGroup('privacy').offline, allowed: allowedDestinations(), ...egressActivity() }));
 
   // ---------- integrity & audit ----------
   r.get('/integrity', owner, (req, res) => {

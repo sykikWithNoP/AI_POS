@@ -167,7 +167,7 @@ export function openCheckout(cart, totals, { sale: existing } = {}) {
       h('div.spinner', { 'aria-hidden': 'true' }),
       h('h4', `Waiting for ${w.method} payment of ${money(w.amount)}`),
       w.pay_url ? h('div.qr-box', h('img', { src: `/api/qr.svg?text=${encodeURIComponent(w.pay_url)}`, alt: 'Scan to pay' })) : null,
-      w.pay_url ? h('a.btn', { href: w.pay_url, target: '_blank', rel: 'noopener' }, icon('link', 16), 'Open payment page') : null,
+      w.pay_url ? h('a.btn', { href: w.pay_url, target: '_blank', rel: 'noopener noreferrer' }, icon('link', 16), 'Open payment page') : null,
       h('div.row-actions',
         h('button.btn', { onclick: () => run(verifyNow) }, icon('refresh', 16), 'Check now'),
         w.method === 'qr' ? h('button.btn.primary', { onclick: () => run(async () => { await post(`/api/payments/${w.id}/confirm`, {}); }) }, icon('check', 16), 'Confirm manually') : null,
