@@ -3,7 +3,7 @@ import { h, icon, money, toMinor, toMajor, toast, errorToast, modal, field, prom
 import { dispatch, getState, subscribe } from '../store.js';
 import { get } from '../api.js';
 import { calculateBill } from '/shared/billing.js';
-import { emitExt, ruleDiscounts, extensionButtons } from '../extensions.js';
+import { cartForExtensions as cartForExt, emitExt, ruleDiscounts, extensionButtons, clickExtensionButton, onRulesUpdate, settleRules, checkBeforeSale } from '../extensions.js';
 import { openCheckout } from './checkout.js';
 import { renderItemsManager } from './items.js';
 import { renderCustomers, pickCustomerDialog } from './customers.js';
@@ -106,7 +106,7 @@ function renderSell(root) {
 
   const drawExtButtons = () => {
     toolbar.querySelector('.ext-buttons').replaceChildren(...extensionButtons().map((b) =>
-      h('button.btn.sm', { title: `From extension: ${b.ext}`, onclick: () => { try { b.onClick(); } catch (e) { errorToast(e); } } }, b.icon ? `${b.icon} ` : '', b.label)));
+      h('button.btn.sm', { title: `From extension: ${b.ext}`, onclick: () => clickExtensionButton(b.id) }, b.icon ? `${b.icon} ` : '', b.label)));
   };
 
   const drawTabs = () => {
@@ -133,6 +133,7 @@ function renderSell(root) {
   });
 
   drawChips(); drawGrid(); drawExtButtons(); drawTabs(); drawCart(cartBox);
+  onRulesUpdate(() => { if (cartBox.isConnected) drawCart(cartBox); });
   const unsub = subscribe((st, prev) => {
     if (st.cart !== prev.cart) drawCart(cartBox);
     if (st.sessions !== prev.sessions || st.active !== prev.active) drawTabs();
@@ -272,12 +273,18 @@ function drawCart(box) {
       h('button.btn.primary.pay', { disabled: !cart.lines.length, onclick: checkout }, h('span', 'Charge'), h('b', money(t.total)), h('kbd', 'F9'))));
 }
 
-function checkout() {
+let checkingOut = false;
+async function checkout() {
   const { cart } = getState();
-  if (!cart.lines.length) return;
-  const t = cartTotals(cart);
-  try { emitExt('sale:before', { ...cart, totals: t }); } catch (e) { toast(e.message, 'warn'); return; }
-  openCheckout(cart, t);
+  if (!cart.lines.length || checkingOut) return;
+  checkingOut = true;
+  try {
+    await settleRules(cart);                 // extension discounts are current
+    const t = cartTotals(cart);
+    const blocked = await checkBeforeSale({ ...cartForExt(cart), total: toMajor(t.total) });
+    if (blocked) { toast(blocked, 'warn'); return; }
+    openCheckout(cart, t);
+  } finally { checkingOut = false; }
 }
 
 function discountDialog(current, apply) {

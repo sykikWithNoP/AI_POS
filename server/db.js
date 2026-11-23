@@ -217,6 +217,68 @@ const COLUMNS = {
   payments: { shift_id: 'INTEGER REFERENCES shifts(id)' },
 };
 
+// Ledger + database-enforced rules. These run inside SQLite, so they apply to any code path
+// (and to anyone poking at the .db file with a SQLite tool, unless they also drop the triggers —
+// which the signed ledger then detects).
+const PROTECTION = `
+CREATE TABLE IF NOT EXISTS ledger (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind         TEXT NOT NULL,
+  ref          TEXT NOT NULL,
+  payload      TEXT NOT NULL,
+  payload_hash TEXT NOT NULL,
+  prev_hash    TEXT NOT NULL,
+  hash         TEXT NOT NULL UNIQUE,
+  created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ledger_kind ON ledger(kind);
+
+CREATE TRIGGER IF NOT EXISTS ledger_no_update BEFORE UPDATE ON ledger BEGIN SELECT RAISE(ABORT, 'ledger is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS ledger_no_delete BEFORE DELETE ON ledger BEGIN SELECT RAISE(ABORT, 'ledger is append-only'); END;
+
+CREATE TRIGGER IF NOT EXISTS sales_no_delete BEFORE DELETE ON sales BEGIN SELECT RAISE(ABORT, 'bills cannot be deleted; void them instead'); END;
+CREATE TRIGGER IF NOT EXISTS sales_immutable BEFORE UPDATE ON sales
+WHEN NEW.invoice_no IS NOT OLD.invoice_no OR NEW.fiscal_year IS NOT OLD.fiscal_year OR NEW.bs_date IS NOT OLD.bs_date
+  OR NEW.created_at IS NOT OLD.created_at OR NEW.subtotal IS NOT OLD.subtotal OR NEW.discount IS NOT OLD.discount
+  OR NEW.service_charge IS NOT OLD.service_charge OR NEW.taxable IS NOT OLD.taxable OR NEW.exempt IS NOT OLD.exempt
+  OR NEW.tax IS NOT OLD.tax OR NEW.total IS NOT OLD.total OR NEW.public_token IS NOT OLD.public_token
+  OR NEW.customer_pan IS NOT OLD.customer_pan
+BEGIN SELECT RAISE(ABORT, 'issued bill amounts and numbers cannot be changed'); END;
+CREATE TRIGGER IF NOT EXISTS sales_status_flow BEFORE UPDATE OF status ON sales
+WHEN NEW.status IS NOT OLD.status AND NOT ((OLD.status = 'pending' AND NEW.status IN ('paid','void')) OR (OLD.status = 'paid' AND NEW.status = 'void'))
+BEGIN SELECT RAISE(ABORT, 'invalid bill status change'); END;
+CREATE TRIGGER IF NOT EXISTS sales_refund_monotonic BEFORE UPDATE OF refunded ON sales
+WHEN NEW.refunded < OLD.refunded OR NEW.refunded > NEW.total
+BEGIN SELECT RAISE(ABORT, 'refunded amount can only grow up to the bill total'); END;
+CREATE TRIGGER IF NOT EXISTS sales_postpone_once BEFORE UPDATE OF postponed ON sales
+WHEN OLD.postponed = 1 AND NEW.postponed = 0
+BEGIN SELECT RAISE(ABORT, 'a pay-later bill cannot be un-postponed'); END;
+
+CREATE TRIGGER IF NOT EXISTS sale_items_no_delete BEFORE DELETE ON sale_items BEGIN SELECT RAISE(ABORT, 'bill lines cannot be deleted'); END;
+CREATE TRIGGER IF NOT EXISTS sale_items_immutable BEFORE UPDATE ON sale_items
+WHEN NEW.sale_id IS NOT OLD.sale_id OR NEW.name IS NOT OLD.name OR NEW.qty IS NOT OLD.qty OR NEW.unit_price IS NOT OLD.unit_price
+  OR NEW.discount IS NOT OLD.discount OR NEW.tax_rate IS NOT OLD.tax_rate OR NEW.tax IS NOT OLD.tax OR NEW.total IS NOT OLD.total
+  OR NEW.refunded_qty < OLD.refunded_qty OR NEW.refunded_qty > NEW.qty
+BEGIN SELECT RAISE(ABORT, 'bill lines cannot be changed'); END;
+
+CREATE TRIGGER IF NOT EXISTS payments_no_delete BEFORE DELETE ON payments BEGIN SELECT RAISE(ABORT, 'payments cannot be deleted'); END;
+CREATE TRIGGER IF NOT EXISTS payments_immutable BEFORE UPDATE ON payments
+WHEN NEW.amount IS NOT OLD.amount OR NEW.sale_id IS NOT OLD.sale_id OR NEW.method IS NOT OLD.method
+  OR (OLD.status IN ('verified','failed','cancelled') AND NEW.status IS NOT OLD.status)
+BEGIN SELECT RAISE(ABORT, 'settled payments cannot be changed'); END;
+
+CREATE TRIGGER IF NOT EXISTS refunds_no_delete BEFORE DELETE ON refunds BEGIN SELECT RAISE(ABORT, 'refunds cannot be deleted'); END;
+CREATE TRIGGER IF NOT EXISTS refunds_immutable BEFORE UPDATE ON refunds
+WHEN NEW.amount IS NOT OLD.amount OR NEW.sale_id IS NOT OLD.sale_id OR NEW.lines IS NOT OLD.lines OR NEW.method IS NOT OLD.method
+  OR NEW.credit_note IS NOT OLD.credit_note OR NEW.created_at IS NOT OLD.created_at OR NEW.tax IS NOT OLD.tax OR NEW.taxable IS NOT OLD.taxable
+BEGIN SELECT RAISE(ABORT, 'refunds cannot be changed'); END;
+
+CREATE TRIGGER IF NOT EXISTS cash_moves_no_update BEFORE UPDATE ON cash_movements BEGIN SELECT RAISE(ABORT, 'cash movements are append-only'); END;
+CREATE TRIGGER IF NOT EXISTS cash_moves_no_delete BEFORE DELETE ON cash_movements BEGIN SELECT RAISE(ABORT, 'cash movements are append-only'); END;
+CREATE TRIGGER IF NOT EXISTS shifts_closed_final BEFORE UPDATE ON shifts WHEN OLD.status = 'closed' BEGIN SELECT RAISE(ABORT, 'closed shifts are final'); END;
+CREATE TRIGGER IF NOT EXISTS shifts_no_delete BEFORE DELETE ON shifts BEGIN SELECT RAISE(ABORT, 'shifts cannot be deleted'); END;
+`;
+
 export function openDb(file) {
   if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
@@ -225,6 +287,7 @@ export function openDb(file) {
     const have = new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name));
     for (const [col, def] of Object.entries(cols)) if (!have.has(col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
   }
+  db.exec(PROTECTION);
   db.exec('CREATE INDEX IF NOT EXISTS idx_sales_customer ON sales(customer_id); CREATE INDEX IF NOT EXISTS idx_sales_shift ON sales(shift_id); CREATE INDEX IF NOT EXISTS idx_payments_shift ON payments(shift_id);');
   return db;
 }

@@ -22,8 +22,11 @@ await new Promise((r) => server.once('listening', r));
 const B = `http://127.0.0.1:${server.address().port}`;
 test.after(() => { server.close(); fs.rmSync(dir, { recursive: true, force: true }); });
 
+// First run: create the owner PIN; the response sets session + elevation cookies.
+const setupRes = await fetch(`${B}/api/auth/setup`, { method: 'POST', headers: { 'X-POS-Client': '1', 'Content-Type': 'application/json' }, body: '{"pin":"2468"}' });
+let COOKIE = setupRes.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ');
 const call = async (method, p, body, headers = {}) => {
-  const res = await fetch(B + p, { method, headers: { 'X-POS-Client': '1', 'Content-Type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined });
+  const res = await fetch(B + p, { method, headers: { 'X-POS-Client': '1', 'Content-Type': 'application/json', Cookie: COOKIE, ...headers }, body: body ? JSON.stringify(body) : undefined });
   const text = await res.text();
   let json; try { json = JSON.parse(text); } catch { json = text; }
   return { status: res.status, json };
@@ -45,7 +48,7 @@ test('item CRUD with validation', async () => {
 });
 
 test('mutations without X-POS-Client are rejected (CSRF guard)', async () => {
-  const res = await fetch(`${B}/api/items`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"name":"x","price":1}' });
+  const res = await fetch(`${B}/api/items`, { method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: COOKIE }, body: '{"name":"x","price":1}' });
   assert.equal(res.status, 403);
 });
 
@@ -118,15 +121,12 @@ test('secrets are encrypted at rest and never returned to the browser', async ()
   assert.equal(settings.getGroup('ai').apiKey, 'sk-ant-SECRET-1234');
 });
 
-test('PIN lock gates the dashboard', async () => {
-  await call('POST', '/api/auth/pin', { pin: '2468' });
-  assert.equal((await call('GET', '/api/bootstrap')).status, 401);
-  const login = await fetch(`${B}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"pin":"2468"}' });
-  const cookie = login.headers.get('set-cookie').split(';')[0];
-  assert.equal((await call('GET', '/api/bootstrap', undefined, { Cookie: cookie })).status, 200);
-  assert.equal((await call('POST', '/api/auth/login', { pin: '0000' })).status, 401);
-  await call('POST', '/api/auth/pin', { current: '2468', pin: '' }, { Cookie: cookie });
+test('lock screen requires the PIN to open the dashboard', async () => {
+  await call('PUT', '/api/settings/security', { values: { lockScreen: true } });
+  const noCookie = await fetch(`${B}/api/bootstrap`, { headers: { 'X-POS-Client': '1' } });
+  assert.equal(noCookie.status, 401);
   assert.equal((await call('GET', '/api/bootstrap')).status, 200);
+  await call('PUT', '/api/settings/security', { values: { lockScreen: false } });
 });
 
 test('online bill page renders and unknown tokens 404', async () => {

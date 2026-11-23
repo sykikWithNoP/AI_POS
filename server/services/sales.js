@@ -1,6 +1,6 @@
 // Sales: authoritative billing, invoice numbering per fiscal year, lifecycle pending -> paid | void.
 import { db, tx, nowIso } from '../db.js';
-import { badRequest, notFound, conflict, randomToken } from '../lib.js';
+import { badRequest, notFound, conflict, randomToken, HttpError } from '../lib.js';
 import { emit, notify } from '../bus.js';
 import { calculateBill, toMinor, formatMoney } from '../../shared/billing.js';
 import { getGroup, nextSequence } from './settings.js';
@@ -9,6 +9,7 @@ import { adjustStock } from './items.js';
 import { getCustomer, redemptionValue, adjustPoints, pointsFor, recordVisit } from './customers.js';
 import { currentShiftId } from './shifts.js';
 import { getPlan, activePlan, activate } from './memberships.js';
+import { append as appendLedger, saleSnapshot } from '../security/ledger.js';
 
 const MAX_LINES = 500;
 
@@ -45,6 +46,19 @@ function buildLines(inputLines) {
   });
 }
 
+/**
+ * Rule: manual + extension discounts above the limit (Settings → Checkout) need the owner PIN.
+ * Member pricing and redeemed points are rule-based, so they don't count toward the limit.
+ */
+function enforceDiscountLimit(bill, { elevated } = {}) {
+  const max = Number(getGroup('checkout').maxDiscountPercent);
+  const manual = bill.discount - (bill.member?.amount || 0) - (bill.redeem?.amount || 0);
+  if (elevated || !(max >= 0) || bill.subtotal <= 0) return;
+  if (manual > Math.round((bill.subtotal * max) / 100)) {
+    throw new HttpError(403, `Discounts above ${max}% need the owner PIN`, 'pin_required');
+  }
+}
+
 export function quote(input) {
   const tax = getGroup('tax');
   const lines = buildLines(input.lines);
@@ -68,8 +82,9 @@ export function quote(input) {
   return { ...bill, redeem, member };
 }
 
-export function createSale(input) {
+export function createSale(input, ctx = {}) {
   const bill = quote(input);
+  enforceDiscountLimit(bill, ctx);
   const biz = getGroup('business');
   const ird = getGroup('ird');
   if (getGroup('shifts').required && !currentShiftId()) throw badRequest('Open a shift before selling');
@@ -94,6 +109,8 @@ export function createSale(input) {
     if (bill.redeem.points) adjustPoints(customerId, -bill.redeem.points);
     const ins = db.prepare('INSERT INTO sale_items (sale_id, item_id, name, qty, unit_price, discount, tax_rate, tax, total, membership_plan_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     for (const l of bill.lines) ins.run(saleId, l.itemId, l.name, l.qty, l.unitPrice, l.lineDiscount + l.cartDiscountShare, l.taxRate, l.tax, l.total, l.membershipPlanId || null);
+    // Sign the issued bill: from here its numbers and lines are frozen.
+    appendLedger('sale.issued', saleId, saleSnapshot(saleId));
     return getSale(saleId);
   });
   emit('sale.created', { sale });
@@ -155,6 +172,7 @@ export function settleSale(saleId) {
     db.prepare(`UPDATE sales SET paid = ?, change_due = ?, payment_method = ?, status = ?, paid_at = COALESCE(paid_at, ?) WHERE id = ?`)
       .run(paid, change, methods.join('+') || null, becamePaid ? 'paid' : s.status, becamePaid ? nowIso() : null, saleId);
     if (becamePaid) {
+      appendLedger('sale.paid', saleId, { paid, methods });
       // Postponed bills already took stock out when they were issued.
       if (!s.postponed) for (const it of db.prepare('SELECT item_id, qty FROM sale_items WHERE sale_id = ? AND item_id IS NOT NULL').all(saleId)) adjustStock(it.item_id, -it.qty);
       if (s.customer_id) {
@@ -185,6 +203,7 @@ export function voidSale(id, reason) {
   if (!reason || !String(reason).trim()) throw badRequest('A reason is required to void a bill');
   tx(() => {
     db.prepare("UPDATE sales SET status = 'void', void_reason = ? WHERE id = ?").run(String(reason).slice(0, 200), s.id);
+    appendLedger('sale.void', s.id, { reason: String(reason).slice(0, 200), wasPaid: s.status === 'paid' });
     db.prepare("UPDATE payments SET status = 'cancelled' WHERE sale_id = ? AND status = 'pending'").run(s.id);
     if (s.status === 'paid' || s.postponed) for (const it of s.items) if (it.item_id) adjustStock(it.item_id, it.qty - it.refunded_qty);
     // Give back redeemed points; take back points earned on this bill.
@@ -217,6 +236,7 @@ export function postponeSale(id, { dueDate } = {}) {
   if (Number.isNaN(due.getTime())) throw badRequest('Invalid due date');
   tx(() => {
     db.prepare('UPDATE sales SET postponed = 1, due_date = ? WHERE id = ?').run(due.toISOString(), s.id);
+    appendLedger('sale.postponed', s.id, { due: due.toISOString() });
     for (const it of s.items) if (it.item_id) adjustStock(it.item_id, -it.qty);
   });
   const sale = getSale(id);

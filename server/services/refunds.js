@@ -9,6 +9,7 @@ import { getSale } from './sales.js';
 import { adjustStock } from './items.js';
 import { adjustPoints, pointsFor } from './customers.js';
 import { currentShiftId } from './shifts.js';
+import { append as appendLedger, refundSnapshot } from '../security/ledger.js';
 
 export const REFUND_METHODS = ['cash', 'card', 'qr', 'esewa', 'khalti', 'stripe', 'store_credit'];
 
@@ -46,6 +47,7 @@ export function createRefund(saleId, { lines, method = 'cash', reason } = {}) {
     }
     db.prepare('UPDATE sales SET refunded = refunded + ? WHERE id = ?').run(amount, sale.id);
     if (sale.customer_id) adjustPoints(sale.customer_id, -Math.min(sale.points_earned, pointsFor(amount, sale.customer_id)));
+    appendLedger('refund', Number(r.lastInsertRowid), refundSnapshot(Number(r.lastInsertRowid)));
     return Number(r.lastInsertRowid);
   });
 

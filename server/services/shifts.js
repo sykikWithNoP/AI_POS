@@ -4,6 +4,7 @@ import { badRequest, conflict, notFound } from '../lib.js';
 import { emit, notify } from '../bus.js';
 import { toMinor, formatMoney } from '../../shared/billing.js';
 import { getGroup } from './settings.js';
+import { append as appendLedger } from '../security/ledger.js';
 
 export const currentShift = () => db.prepare("SELECT * FROM shifts WHERE status = 'open'").get() || null;
 export const currentShiftId = () => currentShift()?.id ?? null;
@@ -40,6 +41,7 @@ export function cashMovement({ kind, amount, reason }) {
   if (a <= 0) throw badRequest('Amount must be positive');
   if (!reason || !String(reason).trim()) throw badRequest('Reason is required');
   db.prepare('INSERT INTO cash_movements (shift_id, kind, amount, reason) VALUES (?, ?, ?, ?)').run(s.id, kind, a, String(reason).slice(0, 120));
+  appendLedger(`cash.${kind}`, s.id, { amount: a, reason: String(reason).slice(0, 120) });
   return report(s.id);
 }
 
@@ -75,12 +77,14 @@ export function closeShift({ counted, note }) {
   const z = tx(() => {
     const pending = db.prepare("SELECT COUNT(*) AS n FROM payments WHERE shift_id = ? AND status = 'pending'").get(s.id).n;
     const before = report(s.id);
-    db.prepare("UPDATE shifts SET status = 'closed', closed_at = ?, counted_cash = ?, expected_cash = ?, note = ? WHERE id = ?")
-      .run(nowIso(), c, before.cash.expected, String(note || '').slice(0, 300) || null, s.id);
-    const z = { ...report(s.id), pendingPayments: pending };
-    db.prepare('UPDATE shifts SET report = ? WHERE id = ?').run(JSON.stringify(z), s.id);
+    const closedAt = nowIso();
+    const z = { ...before, status: 'closed', closedAt, counted: c, variance: c - before.cash.expected, pendingPayments: pending };
+    // One write: a closed shift is final (enforced by a database trigger).
+    db.prepare("UPDATE shifts SET status = 'closed', closed_at = ?, counted_cash = ?, expected_cash = ?, note = ?, report = ? WHERE id = ?")
+      .run(closedAt, c, before.cash.expected, String(note || '').slice(0, 300) || null, JSON.stringify(z), s.id);
     return z;
   });
+  appendLedger('shift.closed', s.id, { expected: z.cash.expected, counted: c, variance: z.variance, gross: z.sales.gross, refunds: z.refundTotal });
   const sym = getGroup('business').currencySymbol;
   notify({ type: 'shift.closed', level: z.variance === 0 ? 'success' : 'warn', title: `Shift closed · ${formatMoney(z.sales.gross, sym)}`, body: `Cash variance ${formatMoney(z.variance, sym)}`, data: { shiftId: s.id } });
   emit('shift.closed', { report: z });

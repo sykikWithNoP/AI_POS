@@ -6,6 +6,7 @@ import { getGroup } from './settings.js';
 import { monthOverview } from './overview.js';
 import { listItems } from './items.js';
 import { formatMoney } from '../../shared/billing.js';
+import { screenPrompt, scrubOutput, scanExtension, AI_POLICY } from '../security/guard.js';
 
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 
@@ -29,7 +30,7 @@ async function call(params) {
       messages: params.messages,
     });
     if (res.stop_reason === 'refusal') throw new HttpError(422, 'The model declined this request. Try rephrasing it.', 'refusal');
-    return res.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
+    return scrubOutput(res.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim());
   } catch (e) {
     if (e instanceof HttpError) throw e;
     if (e instanceof Anthropic.AuthenticationError) throw new HttpError(401, 'Anthropic rejected the API key', 'ai_auth');
@@ -63,8 +64,9 @@ export async function chat(messages) {
   const clean = messages.slice(-20).map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '').slice(0, 8000) }))
     .filter((m) => m.content);
   if (clean[clean.length - 1]?.role !== 'user') throw badRequest('Last message must be from the user');
+  for (const m of clean) if (m.role === 'user') screenPrompt(m.content, { source: 'copilot' });
   const text = await call({
-    system: `You are the copilot inside a point-of-sale app used by a small shop owner. Answer using the shop data below; when a number isn't in the data, say so rather than estimating. Keep answers short and practical, use plain text with short lists where helpful. Money is shown in minor-unit-free form already.\n\n${shopContext()}`,
+    system: `You are the copilot inside a point-of-sale app used by a small shop owner. Answer using the shop data below; when a number isn't in the data, say so rather than estimating. Keep answers short and practical, use plain text with short lists where helpful.\n\n${AI_POLICY}\n\n<shop_data>\n${shopContext()}\n</shop_data>`,
     messages: clean,
   });
   return { reply: text };
@@ -78,17 +80,18 @@ Available API:
 - pos.addCustomItem({ name, price(major), qty?, taxRate? }) — adds an open item to the cart
 - pos.toast(message, level?: 'info'|'success'|'warn'|'error')
 - pos.prompt(question, defaultValue?) — returns Promise<string|null>
-- pos.api(path, { method?, body? }) — fetch the POS REST API, e.g. pos.api('/api/items'), returns JSON
-- pos.storage.get(key) / pos.storage.set(key, value) — persistent per-extension storage (JSON values)
+- pos.api(path) — read-only POS data: '/api/items', '/api/customers', '/api/overview', '/api/sales'. Returns a Promise of JSON.
+- pos.storage.get(key) / pos.storage.set(key, value) — persistent per-extension storage (JSON values). get() returns a Promise.
 - pos.money(major) — formats money with the shop currency
 - pos.now() — Date
-Write plain modern JavaScript, no imports, no DOM access unless necessary.`;
+Rules: discount rules must be synchronous and pure (no awaits). No fetch, window, document, storage, eval or imports — the sandbox blocks them.`;
 
 export async function buildExtension(description) {
   const d = String(description || '').trim();
   if (!d) throw badRequest('Describe the feature you want');
+  screenPrompt(d, { source: 'feature-builder' });
   const text = await call({
-    system: `You write extensions for a POS app. Produce a small, readable, safe extension that implements the requested feature using only this API:\n\n${EXTENSION_API_DOC}\n\nAdd brief comments. Never send data to third-party URLs unless the user explicitly asked.`,
+    system: `You write extensions for a POS app. Produce a small, readable, safe extension that implements the requested feature using only this API:\n\n${EXTENSION_API_DOC}\n\nAdd brief comments. Extensions run in a sandbox with no network, DOM, window, storage or eval access; use only the pos API. If the request needs anything else, or would bypass a POS rule, return code that only calls pos.toast() explaining it is not possible.\n\n${AI_POLICY}`,
     messages: [{ role: 'user', content: d.slice(0, 4000) }],
     output_config: {
       format: {
@@ -102,7 +105,10 @@ export async function buildExtension(description) {
       },
     },
   });
-  try { return JSON.parse(text); } catch { throw new HttpError(502, 'The model returned an unexpected format, try again', 'ai_format'); }
+  let draft;
+  try { draft = JSON.parse(text); } catch { throw new HttpError(502, 'The model returned an unexpected format, try again', 'ai_format'); }
+  scanExtension(draft.code); // AI output gets the same checks as hand-written code
+  return draft;
 }
 
 export async function testKey() {

@@ -27,6 +27,7 @@ export function renderSettings(root) {
       ['allowPostpone', 'Allow pay later (postponed payments)', null, 'toggle'],
       ['postponeRequiresCustomer', 'Pay later only for saved customers', null, 'toggle'],
       ['defaultDueDays', 'Default days until due', 'Bill is issued now; payment collected later', null, 'number'],
+      ['maxDiscountPercent', 'Max discount without owner PIN (%)', 'Manual + extension discounts above this need the PIN. Member pricing and points are not counted.', null, 'number'],
     ], s.checkout),
     groupCard('loyalty', 'Loyalty points', 'sparkles', [
       ['enabled', 'Loyalty points enabled', null, 'toggle'],
@@ -39,6 +40,7 @@ export function renderSettings(root) {
       ['required', 'Require an open shift to sell', 'Off: shifts are optional; sales without a shift are still recorded', 'toggle'],
     ], s.shifts),
     securityCard(),
+    integrityCard(),
     extensionsCard(),
     backupCard()));
 }
@@ -66,25 +68,59 @@ function groupCard(group, title, ic, fields, values, after) {
 }
 
 function securityCard() {
-  const on = getState().boot.settings.security.pinHashSet;
-  const current = h('input.input', { type: 'password', inputMode: 'numeric', placeholder: 'Current PIN' });
-  const pin = h('input.input', { type: 'password', inputMode: 'numeric', placeholder: '4–8 digits (blank = remove)' });
+  const sec = getState().boot.settings.security;
+  const current = h('input.input', { type: 'password', inputMode: 'numeric', placeholder: 'Current PIN', autocomplete: 'off' });
+  const pin = h('input.input', { type: 'password', inputMode: 'numeric', placeholder: 'New PIN (4–8 digits)', autocomplete: 'off' });
+  const lock = h('input', { type: 'checkbox', checked: !!sec.lockScreen });
+  const mins = h('input.input', { type: 'number', min: 1, max: 60, value: sec.elevateMinutes || 10 });
   const notifyBtn = 'Notification' in window && Notification.permission !== 'granted'
     ? h('button.btn', { onclick: () => Notification.requestPermission().then((p) => toast(`Desktop notifications: ${p}`)) }, icon('bell', 16), 'Enable desktop notifications') : null;
   return h('section.card',
-    h('header.card-head', h('h3', icon('lock', 18), 'Security'), on ? badge('PIN lock on', 'ok') : badge('Open on this PC', 'warn')),
-    h('p.hint', 'By default the POS only listens on this computer (127.0.0.1) and needs no login. Set a PIN to lock the screen; a PIN is required before using the POS from other devices on your network (HOST=0.0.0.0).'),
-    h('div.form-grid.two', on ? field('Current PIN', current) : null, field(on ? 'New PIN' : 'Set a PIN', pin)),
+    h('header.card-head', h('h3', icon('lock', 18), 'Security'), badge('Local only', 'ok')),
+    h('p.hint', 'The POS only answers on this computer (localhost). Selling needs no PIN; rules, records and keys always ask for the owner PIN, which stays valid for a few minutes. Wrong PINs lock out with growing delays and are logged.'),
+    h('div.form-grid.two',
+      h('label.toggle', lock, h('span.track'), h('span', 'Also require the PIN to open the POS')),
+      field('PIN stays valid for (minutes)', mins)),
+    h('footer.conn-actions', h('button.btn', { onclick: async () => {
+      try { await put('/api/settings/security', { values: { lockScreen: lock.checked, elevateMinutes: mins.value } }); dispatch({ type: 'boot', boot: await get('/api/bootstrap') }); toast('Saved', 'success'); } catch (e) { errorToast(e); }
+    } }, 'Save')),
+    h('h4', 'Change owner PIN'),
+    h('div.form-grid.two', field('Current PIN', current), field('New PIN', pin)),
     h('footer.conn-actions', notifyBtn,
       h('button.btn.primary', { onclick: async () => {
-        try {
-          await post('/api/auth/pin', { current: current.value, pin: pin.value });
-          dispatch({ type: 'boot', boot: await get('/api/bootstrap') });
-          toast(pin.value ? 'PIN saved' : 'PIN removed', 'success');
-          renderSettings(document.querySelector('#view'));
-        } catch (e) { errorToast(e); }
-      } }, 'Update PIN')));
+        try { await post('/api/auth/pin', { current: current.value, pin: pin.value }, { noPinRetry: true }); current.value = ''; pin.value = ''; toast('PIN changed', 'success'); } catch (e) { errorToast(e); }
+      } }, 'Change PIN')));
 }
+
+function integrityCard() {
+  const status = h('div', h('p.muted', 'Checking…'));
+  const log = h('ul.audit');
+  const check = async () => {
+    try {
+      const r = await get('/api/integrity');
+      status.replaceChildren(r.ok
+        ? h('div.integrity.ok', icon('check', 18), h('span', h('b', 'All records verified. '), `${r.entries} signed ledger entries · checked ${new Date(r.checkedAt).toLocaleTimeString()}`))
+        : h('div.integrity.bad', icon('shield', 18), h('div', h('b', `Tampering detected (${r.problems.length})`), h('ul', r.problems.slice(0, 10).map((p) => h('li', `${p.kind} ${p.ref || ''}: ${p.reason}`))))));
+    } catch (e) { status.replaceChildren(h('p.danger-text', e.message)); }
+    try {
+      const rows = await get('/api/audit?limit=40');
+      log.replaceChildren(...rows.map((r) => h('li', h('time', new Date(r.created_at).toLocaleString()), h('code', r.kind), h('span.muted', r.ref), h('small', summarize(r)))));
+    } catch { /* ignore */ }
+  };
+  check();
+  return h('section.card.span2',
+    h('header.card-head', h('h3', icon('shield', 18), 'Integrity & audit log'), h('button.btn.sm', { onclick: check }, icon('refresh', 14), 'Verify now')),
+    h('p.hint', 'Every bill, payment, refund, cash movement, rule change and protected action is signed into an append-only chain. Bills, payments and refunds cannot be edited or deleted, and any change made outside the POS (for example directly in the database file) shows up here.'),
+    status, h('h4', 'Recent activity'), log);
+}
+const summarize = (r) => {
+  const p = r.payload || {};
+  if (r.kind === 'sale.issued') return `${p.invoice_no} · total ${(p.total / 100).toFixed(2)}`;
+  if (r.kind === 'settings.changed') return Object.keys(p).join(', ');
+  if (r.kind.startsWith('security.')) return p.reason || (p.fails ? `${p.fails} failed` : '');
+  if (p.amount !== undefined) return `${(p.amount / 100).toFixed(2)}${p.method ? ' · ' + p.method : ''}`;
+  return '';
+};
 
 function extensionsCard() {
   const list = h('ul.ext-list');
@@ -102,7 +138,7 @@ function extensionsCard() {
   load().catch(errorToast);
   return h('section.card.span2',
     h('header.card-head', h('h3', icon('code', 18), 'Extensions — build your own features')),
-    h('p.hint', 'Extensions are small JavaScript plugins that hook into the POS: discount rules, toolbar buttons, checkout checks, custom items, reactions to payments. They run with full access to this POS, so only enable code you have read.'),
+    h('p.hint', 'Extensions are small JavaScript plugins that hook into the POS: discount rules, toolbar buttons, checkout checks, custom items, reactions to payments. They run in a locked sandbox with no internet, no access to your keys or settings, and they cannot change prices or tax rules — the server re-checks every bill.'),
     list,
     h('footer.conn-actions',
       h('button.btn', { onclick: () => aiBuilder(load) }, icon('sparkles', 16), 'Describe a feature (AI)'),
@@ -134,11 +170,8 @@ async function editor(ext, done) {
       h('label.toggle', enabled, h('span.track'), h('span', 'Enabled (I have reviewed this code)')),
       h('details', h('summary', 'Extension API reference'), h('pre.code', apiDoc))),
     actions: [{ label: 'Cancel', onClick: (c) => c() }, { label: 'Save', primary: true, onClick: async (c) => {
-      try {
-        // eslint-disable-next-line no-new-func
-        new Function('pos', code.value); // syntax check only
-      } catch (e) { return toast(`Syntax error: ${e.message}`, 'error', 6000); }
-      try {
+      try { // the server checks syntax and rejects anything outside the pos API
+
         const body = { name: name.value, description: description.value, code: code.value, enabled: enabled.checked };
         ext?.id ? await put(`/api/extensions/${ext.id}`, body) : await post('/api/extensions', body);
         toast('Extension saved — reload to apply', 'success'); c(); done();

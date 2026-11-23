@@ -10,7 +10,7 @@ npm install
 npm start
 ```
 
-Then open http://localhost:4321. Data lives in `./data` (SQLite + an encryption key for your saved secrets).
+Then open http://localhost:4321 and create your owner PIN. Data lives in `./data` (SQLite + the key that encrypts your saved secrets and signs the ledger).
 
 Requires Node.js 22.5 or newer (it uses the built-in `node:sqlite`, so there are no native modules to compile).
 
@@ -53,7 +53,7 @@ Requires Node.js 22.5 or newer (it uses the built-in `node:sqlite`, so there are
 eSewa · Khalti · Stripe · Fonepay/Bank QR · Card terminal · Payment notification webhook · IRD CBMS · Google Calendar (your own OAuth client; day-close summaries, optional event per sale) · AI Copilot (your Anthropic key) · Telegram alerts · **POS API keys** (scoped read/write Bearer tokens for your own apps) · **Outbound webhooks** (HMAC-signed events to your URLs).
 
 ### Build your own features
-**Settings → Extensions** runs small JavaScript plugins with a documented `pos` API: discount rules, toolbar buttons, checkout checks, custom items, and reactions to sales and payments. You can also describe a feature in plain words and the AI Copilot drafts the extension (using your Anthropic key). The draft opens **disabled** so you can read it first.
+**Settings → Extensions** runs small JavaScript plugins, sandboxed (see below), with a documented `pos` API: discount rules, toolbar buttons, checkout checks, custom items, and reactions to sales and payments. You can also describe a feature in plain words and the AI Copilot drafts the extension (using your Anthropic key). The draft opens **disabled** so you can read it first.
 
 ## Architecture (one-way)
 
@@ -70,26 +70,54 @@ browser ──HTTP──▶ server/http (routes, pages)   thin: parse input, cal
 ```
 
 - Requests flow down; events flow out. Subscribers react to events but never call back into the event that triggered them.
+- `server/security/` holds the ledger, the prompt/code guard and the code-integrity check; `server/http/auth.js` is the access layer.
 - Frontend: `action → api.js → store (reducer) → render`. Views never mutate state; live server events come in through `live.js`.
 - Money is integer minor units everywhere. The server always re-prices catalog items, so a tampered client can't change prices.
 
-## Security model
-- Listens on **127.0.0.1** only by default. With no PIN set, requests from this PC are trusted.
-- Set a **PIN** (Settings → Security) to lock the screen. A PIN is required before other devices can connect (`HOST=0.0.0.0 npm start`).
-- Browser mutations must carry an `X-POS-Client` header and be same-origin (CSRF guard). The Host header is allow-listed (DNS-rebinding guard).
-- **Secrets are never shown again**: provider keys are encrypted at rest (AES-256-GCM, key in `data/secret.key` or `POS_SECRET_KEY`), and the browser only learns whether a key is saved. API keys are stored as SHA-256 hashes and shown once.
-- Extensions run with full dashboard privileges. Only enable code you have read.
+## Security & anti-tamper
 
-## Configuration
-| Env var | Default | |
-|---|---|---|
-| `PORT` | `4321` | |
-| `HOST` | `127.0.0.1` | set `0.0.0.0` for LAN use (set a PIN first) |
-| `DATA_DIR` | `./data` | database + secret key |
-| `POS_SECRET_KEY` | — | derive the encryption key from this instead of `data/secret.key` |
-| `VERIFY_INTERVAL_MS` | `5000` | payment polling tick |
+**Local only.** The server always binds to `127.0.0.1`. There is no LAN mode. Every request must come from this computer *and* name `localhost`/`127.0.0.1`. If you run a tunnel for e-bills and payment webhooks, the tunnel's domain reaches only `/b/…`, `/pay/…` and `/api/webhooks/…`, never the dashboard or API.
 
-**Backups**: Settings → Backup downloads a consistent copy of the database. Keep `data/secret.key` too, since it's needed to decrypt saved keys.
+**Owner PIN** (created on first run; there are no staff logins). Selling never asks for it. These always need it re-entered (valid for a few minutes):
+- changing prices, items, tax and any other setting, membership tiers, customer tiers or points
+- voids and refunds
+- API keys, webhooks, extensions, Google connect
+- backups
+- discounts above the limit you set (Settings → Checkout)
+
+Five wrong PINs lock it out with growing delays, and every attempt is logged. API keys can never perform protected actions. The PIN can be changed but not removed.
+
+**Rules enforced on the server, not the screen.** The server re-prices every catalog item, recomputes every total, and checks the discount limit. Nothing done in the browser, the console or an extension can change what a bill charges.
+
+**Rules enforced by the database.** SQLite triggers refuse:
+- edits to an issued bill's numbers, amounts or lines
+- deleting bills, payments or refunds
+- changing a settled payment
+- reopening a paid or voided bill
+- editing a closed shift or its cash movements
+
+**Signed ledger (tamper evidence).** Every bill, payment, refund, cash movement, settings change and protected action is chained with an HMAC key derived from `data/secret.key`. At startup, and in Settings → Integrity & audit log, the POS re-verifies the chain and compares every bill and refund with its signed copy. Anything changed outside the app (for example by editing the database file with the triggers dropped) shows a red tamper banner.
+
+**Extension sandbox.** Extensions run in an `<iframe sandbox="allow-scripts">` with an opaque origin and a CSP that forbids every network request. They have no cookies, no storage, no access to the page, settings or keys, and they can read only items, customers, sales and overview. Code is scanned before saving: network, `eval`/`Function`, prototype tricks, globals and protected API paths are rejected. An extension edited directly in the database stops loading, because its hash no longer matches the ledger.
+
+**AI prompt layer.** Copilot and feature-builder requests are screened. Attempts to extract keys, PINs, the system prompt or source code, to reverse-engineer the app, to jailbreak, or to bypass tax, IRD, PIN or ledger rules are refused and logged. The model runs under a fixed policy, shop data is passed as untrusted `<shop_data>`, and any configured secret or key-shaped string is scrubbed from replies. Generated extension code goes through the same scanner.
+
+**Hardening.** The strict Content-Security-Policy uses nonces for the few inline scripts. Other protections:
+- `X-Robots-Tag`/meta `noindex, noai`
+- no source maps
+- a console warning against paste-scams and automated agents
+- provider secrets encrypted at rest (AES-256-GCM)
+- API keys stored only as hashes
+
+### Release build (what you ship)
+
+```bash
+npm run build
+```
+
+This writes `dist/`: a single minified server bundle (`server.mjs`, all dependencies included), a minified UI, no source maps, a proprietary notice, and a sealed `integrity.json`. Copy only the `dist` folder to the shop PC and start it with `npm start` inside it (Node 22.5+). If any shipped file is modified, the release refuses to start (exit code 78). During development, `npm run seal` records the current files and `POS_STRICT_INTEGRITY=1` turns on the same check.
+
+**What this cannot do:** someone with administrator access to the PC can still read and change anything on it; minified JavaScript can still be studied with enough effort. The protections above make every rule server-enforced, make tampering visible, and make extraction unrewarding. Keep the source repository private, and use full-disk encryption plus a PC login password for the strongest setup.
 
 ## Tests
 
@@ -97,9 +125,9 @@ browser ──HTTP──▶ server/http (routes, pages)   thin: parse input, cal
 npm test
 ```
 
-The tests cover the billing maths, BS dates/fiscal years, item CRUD, CSRF, server-side pricing, split payments, webhook signatures and idempotency, API-key scopes, secret masking, the PIN lock, e-bills, IRD dry-run, memberships, loyalty, refunds, shifts and pay-later.
+The tests cover the billing maths, BS dates/fiscal years, item CRUD, CSRF, server-side pricing, split payments, webhook signatures and idempotency, API-key scopes, secret masking, e-bills, IRD dry-run, memberships, loyalty, refunds, shifts and pay-later. Security tests cover local-only access, PIN step-up and lockout, the discount limit, database triggers, ledger tamper detection, the AI prompt guard, the extension scanner and the sandbox CSP.
 
 ## Notes & limits
 - The IRD CBMS field mapping follows the published CBMS JSON format. Keep **dry-run on** until you've confirmed it with IRD for your PAN.
 - eSewa/Khalti/Stripe flows follow each provider's documented API but haven't been exercised against live accounts here. Run a small sandbox sale end to end before going live.
-- Not yet included: staff accounts with roles, item variants/modifiers, gift cards, multi-location, kitchen display/table maps, thermal (ESC/POS) printer drivers.
+- Not included by design: staff accounts, gift cards. Not yet included: item variants/modifiers, multi-location, kitchen display/table maps, thermal (ESC/POS) printer drivers.

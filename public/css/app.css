@@ -388,3 +388,15 @@ ol.rank { counter-reset: r; } ol.rank li::before { counter-increment: r; content
 .assign-list li { display: grid; grid-template-columns: 1fr 200px; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); }
 .settings .card h4 { margin: 4px 0 0; }
 @media (max-width: 760px) { .catalog { grid-template-rows: none; } .action-bar { order: 5; } .assign-list li { grid-template-columns: 1fr; } }
+
+/* ---------- security ---------- */
+.integrity-banner { display: flex; align-items: center; gap: 10px; padding: 10px 20px; background: var(--bad); color: #fff; font-weight: 550; }
+.integrity-banner a { color: #fff; margin-left: auto; font-weight: 700; }
+.integrity { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: var(--radius-sm); }
+.integrity.ok { background: var(--ok-soft); color: var(--ok); }
+.integrity.bad { background: var(--bad-soft); color: var(--bad); }
+.integrity ul { margin: 6px 0 0; padding-left: 18px; }
+.audit { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; max-height: 320px; overflow: auto; font-size: 13px; }
+.audit li { display: grid; grid-template-columns: 170px 170px 80px 1fr; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--border); }
+.audit code { font: 12px var(--mono); }
+@media (max-width: 760px) { .audit li { grid-template-columns: 1fr 1fr; } }

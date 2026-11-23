@@ -6,7 +6,8 @@ import path from 'node:path';
 import QRCode from 'qrcode';
 import { db } from '../db.js';
 import { HttpError, badRequest, safeEqual, hmacHex, randomToken } from '../lib.js';
-import { requireAuth, login, logout, authState, clearSessions } from './auth.js';
+import { requireAuth, login, logout, authState, setup, elevate, changePin, dropElevation, csrfOnly } from './auth.js';
+import { append as appendLedger, verify as verifyLedger, recent as ledgerRecent } from '../security/ledger.js';
 import { toCsv, parseCsv } from './csv.js';
 import { sseHandler, listNotifications, markAllRead } from '../bus.js';
 import * as settings from '../services/settings.js';
@@ -26,8 +27,9 @@ import * as refunds from '../services/refunds.js';
 import * as calendar from '../services/calendar.js';
 import * as stripe from '../providers/stripe.js';
 import { sendTelegram } from '../notifiers.js';
-import { hashPin, verifyPin } from '../lib.js';
 import { toMajor } from '../../shared/billing.js';
+import { checkCode } from '../security/integrity.js';
+import { config } from '../config.js';
 
 export const baseUrl = (req) => (settings.getGroup('business').publicUrl || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
 
@@ -35,29 +37,32 @@ export function apiRouter() {
   const r = Router();
   const owner = requireAuth();
   const scoped = requireAuth({ scope: true });
+  const audit = (kind, ref, payload) => appendLedger(kind, ref, payload);
+  // Every protected action that succeeds is written to the signed ledger.
+  const audited = (guard) => (req, res, next) => {
+    guard(req, res, () => {
+      res.on('finish', () => { if (res.statusCode < 300) audit('protected.action', `${req.method} ${req.baseUrl}${req.path}`, { by: req.who?.kind }); });
+      next();
+    });
+  };
+  const pin = audited(requireAuth({ elevated: true }));                       // owner + PIN re-entered
+  const pinOrKey = audited(requireAuth({ scope: true, elevatedOwner: true })); // owner + PIN, or write-scoped API key
+  const local = csrfOnly;
 
   // ---------- auth & bootstrap ----------
   r.get('/auth/state', (req, res) => res.json(authState(req)));
-  r.post('/auth/login', (req, res) => res.json(login(req, res, req.body?.pin)));
+  r.post('/auth/login', local, (req, res) => res.json(login(req, res, req.body?.pin)));
   r.post('/auth/logout', (req, res) => { logout(req, res); res.json({ ok: true }); });
-  r.post('/auth/pin', owner, (req, res) => {
-    const { current, pin } = req.body || {};
-    const sec = settings.getGroup('security');
-    if (sec.pinHash && !verifyPin(current, sec.pinHash)) throw new HttpError(401, 'Current PIN is wrong', 'bad_pin');
-    if (pin) {
-      if (!/^\d{4,8}$/.test(String(pin))) throw badRequest('PIN must be 4–8 digits');
-      settings.setGroup('security', { pinHash: hashPin(pin) });
-    } else settings.setGroup('security', {}, { clearSecrets: ['pinHash'] });
-    clearSessions();
-    if (pin) login(req, res, pin);
-    res.json({ ok: true, pinEnabled: !!pin });
-  });
+  r.post('/auth/setup', local, (req, res) => res.json(setup(req, res, req.body?.pin)));
+  r.post('/auth/elevate', owner, (req, res) => res.json(elevate(req, res, req.body?.pin)));
+  r.post('/auth/drop', owner, (req, res) => { dropElevation(req); res.json({ ok: true }); });
+  r.post('/auth/pin', owner, (req, res) => res.json(changePin(req, res, req.body || {})));
 
   r.get('/bootstrap', owner, (req, res) => res.json({
     settings: settings.publicSettings(),
     methods: payments.availableMethods(),
     categories: items.categories(),
-    extensions: exts.listExtensions().filter((e) => e.enabled),
+    extensions: exts.verifiedEnabledExtensions().map((e) => ({ id: e.id, name: e.name, code: e.code })),
     google: { connected: calendar.isConnected() },
     plans: memberships.listPlans(),
     shift: shifts.currentShift(),
@@ -79,20 +84,20 @@ export function apiRouter() {
       { label: 'emoji', get: (i) => i.emoji }, { label: 'active', get: (i) => (i.active ? 1 : 0) },
     ]));
   });
-  r.post('/items/import', owner, (req, res) => {
+  r.post('/items/import', pin, (req, res) => {
     const rows = typeof req.body?.csv === 'string' ? parseCsv(req.body.csv) : req.body?.rows;
     if (!Array.isArray(rows)) throw badRequest('Send { csv } text or { rows } array');
     res.json(items.importItems(rows.slice(0, 5000)));
   });
   r.get('/items/:id', scoped, (req, res) => res.json(items.getItem(req.params.id)));
-  r.post('/items', scoped, (req, res) => res.status(201).json(items.createItem(req.body || {})));
-  r.put('/items/:id', scoped, (req, res) => res.json(items.updateItem(req.params.id, req.body || {})));
-  r.delete('/items/:id', scoped, (req, res) => res.json(items.deleteItem(req.params.id)));
+  r.post('/items', pinOrKey, (req, res) => res.status(201).json(items.createItem(req.body || {})));
+  r.put('/items/:id', pinOrKey, (req, res) => { const it = items.updateItem(req.params.id, req.body || {}); audit('item.updated', it.id, { name: it.name, price: it.price, tax_rate: it.tax_rate }); res.json(it); });
+  r.delete('/items/:id', pinOrKey, (req, res) => { const r2 = items.deleteItem(req.params.id); audit('item.deleted', req.params.id, {}); res.json(r2); });
   r.get('/categories', scoped, (req, res) => res.json(items.categories()));
 
   // ---------- sales ----------
   r.post('/sales/quote', scoped, (req, res) => res.json(sales.quote(req.body || {})));
-  r.post('/sales', scoped, (req, res) => res.status(201).json(sales.createSale(req.body || {})));
+  r.post('/sales', scoped, (req, res) => res.status(201).json(sales.createSale(req.body || {}, { elevated: req.elevated })));
   r.get('/sales', scoped, (req, res) => res.json(sales.listSales(req.query)));
   r.get('/sales/export.csv', owner, (req, res) => {
     const rows = sales.listSales({ ...req.query, limit: 1000 });
@@ -104,38 +109,38 @@ export function apiRouter() {
     ]));
   });
   r.get('/sales/:id', scoped, (req, res) => res.json(sales.getSale(req.params.id)));
-  r.post('/sales/:id/void', owner, (req, res) => res.json(sales.voidSale(req.params.id, req.body?.reason)));
+  r.post('/sales/:id/void', pin, (req, res) => res.json(sales.voidSale(req.params.id, req.body?.reason)));
   r.post('/sales/:id/ird-sync', owner, async (req, res) => res.json(await ird.syncSale(Number(req.params.id))));
 
   r.post('/sales/:id/postpone', scoped, (req, res) => res.json(sales.postponeSale(Number(req.params.id), req.body || {})));
   r.get('/outstanding', scoped, (req, res) => res.json(sales.outstanding()));
-  r.post('/sales/:id/refunds', owner, (req, res) => res.status(201).json(refunds.createRefund(Number(req.params.id), req.body || {})));
+  r.post('/sales/:id/refunds', pin, (req, res) => res.status(201).json(refunds.createRefund(Number(req.params.id), req.body || {})));
 
   // ---------- customers & loyalty ----------
   r.get('/customers', scoped, (req, res) => res.json(customers.listCustomers(req.query)));
   r.post('/customers', scoped, (req, res) => res.status(201).json(customers.createCustomer(req.body || {})));
   r.get('/customers/:id', scoped, (req, res) => res.json({ ...customers.getCustomer(req.params.id), history: customers.customerHistory(req.params.id) }));
   r.put('/customers/:id', scoped, (req, res) => res.json(customers.updateCustomer(req.params.id, req.body || {})));
-  r.delete('/customers/:id', owner, (req, res) => res.json(customers.deleteCustomer(req.params.id)));
-  r.post('/customers/:id/points', owner, (req, res) => {
+  r.delete('/customers/:id', pin, (req, res) => res.json(customers.deleteCustomer(req.params.id)));
+  r.post('/customers/:id/points', pin, (req, res) => {
     const delta = Math.trunc(Number(req.body?.delta));
     if (!delta) throw badRequest('delta must be a non-zero whole number');
     customers.adjustPoints(Number(req.params.id), delta);
     res.json(customers.getCustomer(req.params.id));
   });
-  r.post('/customers/:id/membership', owner, (req, res) => {
+  r.post('/customers/:id/membership', pin, (req, res) => {
     // Direct (comp) enrolment by the owner. Paid enrolment goes through a sale line { membershipPlanId }.
     memberships.activate(Number(req.params.id), req.body?.planId, { via: 'comp' });
     res.json(customers.getCustomer(req.params.id));
   });
-  r.put('/customers/:id/tier', owner, (req, res) => { memberships.setTier(Number(req.params.id), req.body?.planId); res.json(customers.getCustomer(req.params.id)); });
-  r.delete('/customers/:id/membership', owner, (req, res) => { memberships.cancelMembership(req.params.id); res.json(customers.getCustomer(req.params.id)); });
+  r.put('/customers/:id/tier', pin, (req, res) => { memberships.setTier(Number(req.params.id), req.body?.planId); res.json(customers.getCustomer(req.params.id)); });
+  r.delete('/customers/:id/membership', pin, (req, res) => { memberships.cancelMembership(req.params.id); res.json(customers.getCustomer(req.params.id)); });
 
   // ---------- membership plans ----------
   r.get('/membership-plans', scoped, (req, res) => res.json({ plans: memberships.listPlans({ all: req.query.all === '1' }), stats: memberships.planStats() }));
-  r.post('/membership-plans', owner, (req, res) => res.status(201).json(memberships.createPlan(req.body || {})));
-  r.put('/membership-plans/:id', owner, (req, res) => res.json(memberships.updatePlan(req.params.id, req.body || {})));
-  r.delete('/membership-plans/:id', owner, (req, res) => res.json(memberships.deletePlan(req.params.id)));
+  r.post('/membership-plans', pin, (req, res) => res.status(201).json(memberships.createPlan(req.body || {})));
+  r.put('/membership-plans/:id', pin, (req, res) => res.json(memberships.updatePlan(req.params.id, req.body || {})));
+  r.delete('/membership-plans/:id', pin, (req, res) => res.json(memberships.deletePlan(req.params.id)));
 
   // ---------- shifts & cash drawer ----------
   r.get('/shifts/current', owner, (req, res) => { const s = shifts.currentShift(); res.json(s ? { shift: s, report: shifts.report(s.id) } : { shift: null }); });
@@ -159,10 +164,13 @@ export function apiRouter() {
 
   // ---------- settings & connectors ----------
   r.get('/settings', owner, (req, res) => res.json(settings.publicSettings()));
-  r.put('/settings/:group', owner, (req, res) => {
+  r.put('/settings/:group', pin, (req, res) => {
     const { group } = req.params;
-    if (!(group in settings.DEFAULTS) || group === 'security') throw badRequest('Unknown settings group');
-    settings.setGroup(group, req.body?.values || {}, { clearSecrets: req.body?.clearSecrets || [] });
+    if (!(group in settings.DEFAULTS)) throw badRequest('Unknown settings group');
+    let values = req.body?.values || {};
+    // The PIN itself only changes through /auth/pin (which checks the current PIN).
+    if (group === 'security') values = { lockScreen: values.lockScreen, elevateMinutes: values.elevateMinutes };
+    settings.setGroup(group, values, { clearSecrets: group === 'security' ? [] : req.body?.clearSecrets || [] });
     res.json(settings.publicGroup(group));
   });
 
@@ -187,38 +195,38 @@ export function apiRouter() {
     }
     throw badRequest('Unknown connector');
   });
-  r.post('/connectors/genericWebhook/rotate', owner, (req, res) => {
+  r.post('/connectors/genericWebhook/rotate', pin, (req, res) => {
     const secret = `whsec_${randomToken(24)}`;
     settings.setGroup('genericWebhook', { secret });
     res.json({ secret });
   });
 
   r.get('/keys', owner, (req, res) => res.json(apikeys.listKeys()));
-  r.post('/keys', owner, (req, res) => res.status(201).json(apikeys.createKey(req.body || {})));
-  r.delete('/keys/:id', owner, (req, res) => res.json(apikeys.revokeKey(req.params.id)));
+  r.post('/keys', pin, (req, res) => res.status(201).json(apikeys.createKey(req.body || {})));
+  r.delete('/keys/:id', pin, (req, res) => res.json(apikeys.revokeKey(req.params.id)));
 
   r.get('/webhooks-out', owner, (req, res) => res.json({ hooks: hooks.listHooks(), events: hooks.EVENTS }));
-  r.post('/webhooks-out', owner, (req, res) => res.status(201).json(hooks.createHook(req.body || {})));
-  r.delete('/webhooks-out/:id', owner, (req, res) => res.json(hooks.deleteHook(req.params.id)));
+  r.post('/webhooks-out', pin, (req, res) => res.status(201).json(hooks.createHook(req.body || {})));
+  r.delete('/webhooks-out/:id', pin, (req, res) => res.json(hooks.deleteHook(req.params.id)));
 
   // ---------- extensions & AI ----------
   r.get('/extensions', owner, (req, res) => res.json(exts.listExtensions()));
-  r.post('/extensions', owner, (req, res) => res.status(201).json(exts.createExtension(req.body || {})));
-  r.put('/extensions/:id', owner, (req, res) => res.json(exts.updateExtension(req.params.id, req.body || {})));
-  r.delete('/extensions/:id', owner, (req, res) => res.json(exts.deleteExtension(req.params.id)));
+  r.post('/extensions', pin, (req, res) => res.status(201).json(exts.createExtension(req.body || {})));
+  r.put('/extensions/:id', pin, (req, res) => res.json(exts.updateExtension(req.params.id, req.body || {})));
+  r.delete('/extensions/:id', pin, (req, res) => res.json(exts.deleteExtension(req.params.id)));
   r.get('/extensions-api', owner, (req, res) => res.json({ doc: ai.EXTENSION_API_DOC }));
   r.post('/ai/chat', owner, async (req, res) => res.json(await ai.chat(req.body?.messages)));
-  r.post('/ai/extension', owner, async (req, res) => res.json(await ai.buildExtension(req.body?.description)));
+  r.post('/ai/extension', pin, async (req, res) => res.json(await ai.buildExtension(req.body?.description)));
 
   // ---------- Google Calendar ----------
   r.get('/google/status', owner, (req, res) => res.json({ connected: calendar.isConnected(), redirectUri: calendar.redirectUri(baseUrl(req)) }));
-  r.get('/google/connect', owner, (req, res) => res.redirect(calendar.authUrl(baseUrl(req))));
+  r.get('/google/connect', pin, (req, res) => res.redirect(calendar.authUrl(baseUrl(req))));
   r.get('/google/callback', owner, async (req, res) => {
     if (req.query.error) return res.redirect('/#/connectors?google=denied');
     await calendar.handleCallback(baseUrl(req), req.query);
     res.redirect('/#/connectors?google=connected');
   });
-  r.post('/google/disconnect', owner, (req, res) => { calendar.disconnect(); res.json({ ok: true }); });
+  r.post('/google/disconnect', pin, (req, res) => { calendar.disconnect(); res.json({ ok: true }); });
   r.get('/google/events', owner, async (req, res) => res.json(await calendar.upcoming(Number(req.query.days) || 14)));
   r.post('/google/events', owner, async (req, res) => res.status(201).json(await calendar.createEvent(req.body || {})));
   r.post('/google/day-summary', owner, async (req, res) => {
@@ -232,13 +240,22 @@ export function apiRouter() {
     }));
   });
 
+  // ---------- integrity & audit ----------
+  r.get('/integrity', owner, (req, res) => {
+    const data = verifyLedger();
+    const code = checkCode(config.root, config.codeDirs);
+    res.json({ ...data, ok: data.ok && code.ok, code: { sealed: code.sealed, ok: code.ok, changed: code.changed.length + code.added.length + code.missing.length },
+      problems: [...data.problems, ...(code.ok ? [] : [{ kind: 'code', ref: '', reason: `${code.changed.length + code.added.length + code.missing.length} application file(s) differ from the sealed release` }])] });
+  });
+  r.get('/audit', owner, (req, res) => res.json(ledgerRecent({ limit: req.query.limit, kind: req.query.kind })));
+
   // ---------- utilities ----------
   r.get('/qr.svg', owner, async (req, res) => {
     const text = String(req.query.text || '');
     if (!text || text.length > 1500) throw badRequest('text required (max 1500 chars)');
     res.type('image/svg+xml').send(await QRCode.toString(text, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }));
   });
-  r.get('/backup.db', owner, (req, res) => {
+  r.get('/backup.db', pin, (req, res) => {
     const file = path.join(os.tmpdir(), `pos-backup-${Date.now()}.db`);
     db.exec(`VACUUM INTO '${file.replace(/'/g, "''")}'`);
     res.download(file, `pos-backup-${new Date().toISOString().slice(0, 10)}.db`, () => fs.rm(file, { force: true }, () => {}));

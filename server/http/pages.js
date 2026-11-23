@@ -1,5 +1,7 @@
 // Server-rendered public pages: the online bill (shareable link) and payment return pages.
 import { Router } from 'express';
+import fs from 'node:fs';
+import crypto from 'node:crypto';
 import QRCode from 'qrcode';
 import { getGroup } from '../services/settings.js';
 import { getSaleByToken } from '../services/sales.js';
@@ -11,10 +13,23 @@ import { baseUrl } from './routes.js';
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const shell = (title, body) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${esc(title)}</title><link rel="stylesheet" href="/css/bill.css"></head><body>${body}</body></html>`;
+<title>${esc(title)}</title><meta name="robots" content="noindex,nofollow,noai,noimageai"><link rel="stylesheet" href="/css/bill.css"></head><body>${body}</body></html>`;
+
+const SANDBOX_JS = globalThis.__POS_SANDBOX__ ?? fs.readFileSync(new URL('../sandbox/runtime.js', import.meta.url), 'utf8');
 
 export function pagesRouter() {
   const r = Router();
+
+  // Extension sandbox. Loaded in <iframe sandbox="allow-scripts"> (opaque origin: no cookies, storage or
+  // parent DOM). Its CSP forbids every network request, so extension code cannot exfiltrate anything.
+  r.get('/sandbox.html', (req, res) => {
+    const nonce = crypto.randomBytes(16).toString('base64');
+    res.set({
+      'Content-Security-Policy': `default-src 'none'; script-src 'nonce-${nonce}' 'unsafe-eval'; connect-src 'none'; img-src 'none'; style-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'; sandbox allow-scripts`,
+      'Cache-Control': 'no-store',
+    });
+    res.type('html').send(`<!doctype html><meta charset="utf-8"><title>sandbox</title><script nonce="${nonce}">${SANDBOX_JS}</script>`);
+  });
 
   r.get('/b/:token', async (req, res) => {
     let sale;
@@ -64,16 +79,17 @@ export function pagesRouter() {
   <footer>
     <div class="qr">${qr}</div>
     <p>${esc(biz.receiptFooter)}</p>
-    <button onclick="print()" class="noprint">Print / Save PDF</button>
+    <button id="print-btn" class="noprint">Print / Save PDF</button>
+    <script nonce="${res.locals.nonce}">document.getElementById('print-btn').addEventListener('click',()=>print())</script>
   </footer>
-</main>${req.query.print ? '<script>addEventListener("load",()=>setTimeout(()=>print(),200))</script>' : ''}`;
+</main>${req.query.print ? `<script nonce="${res.locals.nonce}">addEventListener("load",()=>setTimeout(()=>print(),200))</script>` : ''}`;
     res.set('Cache-Control', 'no-store').send(shell(`${biz.name} · ${sale.invoice_no}`, body));
   });
 
   // Payment return pages: never trust query params, always re-verify with the provider.
   const done = (res, ok, msg) => res.send(shell('Payment', `<main class="bill center"><h1>${ok ? '✅ Payment received' : '⏳ ' + esc(msg)}</h1>
     <p>${ok ? 'You can close this window.' : 'The POS will update automatically once the payment is confirmed.'}</p></main>
-    <script>try{window.opener&&window.opener.postMessage({type:'pos:payment-return'},location.origin)}catch(e){}${ok ? 'setTimeout(()=>window.close(),2500)' : ''}</script>`));
+    <script nonce="${res.locals.nonce}">try{window.opener&&window.opener.postMessage({type:'pos:payment-return'},location.origin)}catch(e){}${ok ? 'setTimeout(()=>window.close(),2500)' : ''}</script>`));
 
   const verifyAndRespond = async (req, res, failedMsg) => {
     const pid = Number(req.query.pid);

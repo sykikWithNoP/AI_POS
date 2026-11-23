@@ -6,6 +6,7 @@ import { toMinor, formatMoney } from '../../shared/billing.js';
 import { getGroup } from './settings.js';
 import { getSale, settleSale } from './sales.js';
 import { currentShiftId } from './shifts.js';
+import { append as appendLedger } from '../security/ledger.js';
 import * as esewa from '../providers/esewa.js';
 import * as khalti from '../providers/khalti.js';
 import * as stripe from '../providers/stripe.js';
@@ -81,6 +82,7 @@ const str = (v) => (v === undefined || v === null || String(v).trim() === '' ? n
 
 function onVerified(paymentId) {
   const p = getPayment(paymentId);
+  appendLedger('payment.verified', p.sale_id, { paymentId: p.id, method: p.method, amount: p.amount, reference: p.reference || null });
   const sym = getGroup('business').currencySymbol;
   emit('payment.verified', { payment: p });
   if (METHODS[p.method]?.kind !== 'instant') {

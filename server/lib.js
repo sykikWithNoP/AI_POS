@@ -55,6 +55,11 @@ function key() {
   masterKey = Buffer.from(fs.readFileSync(file, 'utf8').trim(), 'hex');
   return masterKey;
 }
+/** Purpose-bound sub-key (e.g. 'ledger') derived from the master key. */
+export function deriveKey(label) {
+  return crypto.createHmac('sha256', key()).update(`free-ai-pos:${label}`).digest();
+}
+
 export function encrypt(plain) {
   const iv = crypto.randomBytes(12);
   const c = crypto.createCipheriv('aes-256-gcm', key(), iv);

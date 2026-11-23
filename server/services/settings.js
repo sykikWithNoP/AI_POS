@@ -2,6 +2,7 @@
 // and never sent back to the browser in clear text (only a masked hint).
 import { db } from '../db.js';
 import { encrypt, decrypt } from '../lib.js';
+import { append as appendLedger } from '../security/ledger.js';
 
 export const DEFAULTS = {
   business: {
@@ -10,7 +11,8 @@ export const DEFAULTS = {
     receiptFooter: 'Thank you for your purchase!', calendar: 'AD', publicUrl: '',
   },
   tax: { rate: 13, inclusive: false, serviceChargeRate: 0, label: 'VAT' },
-  security: { pinHash: '' },
+  // Owner PIN is mandatory (set on first run). lockScreen also requires it to open the dashboard.
+  security: { pinHash: '', lockScreen: false, elevateMinutes: 10 },
   ui: { theme: 'system', sound: true, compactGrid: false },
   esewa: { enabled: false, sandbox: true, productCode: 'EPAYTEST', secretKey: '' },
   khalti: { enabled: false, sandbox: true, secretKey: '' },
@@ -30,7 +32,7 @@ export const DEFAULTS = {
   // Loyalty: earn `earnPoints` per `earnPer` spent (major units); each point is worth `pointValue` (major units) when redeemed.
   loyalty: { enabled: true, earnPer: 100, earnPoints: 1, pointValue: 1, minRedeem: 50 },
   shifts: { required: false },
-  checkout: { allowPostpone: false, postponeRequiresCustomer: true, defaultDueDays: 7 },
+  checkout: { allowPostpone: false, postponeRequiresCustomer: true, defaultDueDays: 7, maxDiscountPercent: 20 },
   memberships: { defaultPlanId: 0 },
 };
 
@@ -71,6 +73,10 @@ export function setGroup(group, patch, { clearSecrets = [] } = {}) {
     current[k] = coerce(DEFAULTS[group][k], v);
   }
   for (const k of clearSecrets) if (secrets.includes(k)) current[k] = '';
+  // Audit: which fields changed. Secret values are never written to the ledger, only the field name.
+  const before = getGroup(group);
+  const changed = Object.keys(current).filter((k) => String(current[k]) !== String(before[k]));
+  if (changed.length) appendLedger('settings.changed', group, Object.fromEntries(changed.map((k) => [k, secrets.includes(k) ? '(secret updated)' : current[k]])));
   const toStore = { ...current };
   for (const f of secrets) if (toStore[f]) toStore[f] = encrypt(toStore[f]);
   putStmt.run(group, JSON.stringify(toStore));
