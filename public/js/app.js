@@ -66,7 +66,8 @@ function renderSetup() {
     h('div.setup-cols',
       h('div.form-grid', h('h3', '1. Till PIN'), h('p.muted', 'For quick approvals at the till: voids, refunds, big discounts, price changes.'), pin, again),
       h('div.form-grid', h('h3', '2. Owner account'), h('p.muted', 'Opens Overview, Settings and Connectors together with an Owner Key you\'ll get next.'), user, pass, pass2)),
-    h('button.btn.primary.block', { onclick: submit }, icon('lock', 16), 'Create and show my Owner Key'))));
+    h('button.btn.primary.block', { onclick: submit }, icon('lock', 16), 'Create and show my Owner Key'),
+    h('p.licence-note', 'Personal use only. Commercial use requires the copyright holder\'s written approval — see LICENSE.'))));
   setTimeout(() => pin.focus(), 50);
 }
 

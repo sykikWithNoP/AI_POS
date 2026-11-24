@@ -1,5 +1,7 @@
 # Free AI POS
 
+> **Licence: personal use only. Commercial use without the copyright holder's written approval is forbidden.** See [LICENSE](LICENSE).
+
 A self-hosted point-of-sale system for a shop owner's own PC. It runs on localhost, needs no build step and no cloud account, and works with keys you supply yourself (BYOK) for payments, IRD, Google Calendar, Telegram and AI.
 
 ```bash
