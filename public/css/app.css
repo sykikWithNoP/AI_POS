@@ -486,3 +486,20 @@ body.owner-on .owner-lock { display: none; }
 .setup-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
 .setup-cols h3 { font-size: 15px; }
 @media (max-width: 760px) { .setup-cols { grid-template-columns: 1fr; } .owner-lock { display: none; } }
+
+.report-out { display: grid; gap: 10px; }
+.report-head h3 { font-size: 17px; }
+.report-head p { margin: 2px 0 0; }
+.report-table tr.cn td { color: var(--bad); }
+.report-table tr.cancelled td { color: var(--muted); text-decoration: line-through; }
+.report-table tr.cancelled td:last-child { text-decoration: none; }
+
+.ird-page { display: grid; gap: 16px; }
+.checklist { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 6px; }
+.checklist li { display: flex; gap: 8px; align-items: center; }
+.checklist li.ok { color: var(--ok); } .checklist li.todo { color: var(--muted); }
+.kpis.small .kpi-value { font-size: 20px; }
+.steps { display: flex; gap: 8px; list-style: none; padding: 0; margin: 0 0 14px; counter-reset: s; }
+.steps li { flex: 1; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); color: var(--muted); font-weight: 600; font-size: 13px; counter-increment: s; }
+.steps li::before { content: counter(s) ". "; }
+.steps li.on { background: var(--accent); color: var(--accent-ink); } .steps li.done { color: var(--ok); }

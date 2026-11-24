@@ -93,5 +93,6 @@ if (isMain) {
   app.listen(config.port, config.host, () => {
     log.info('POS ready', { url: `http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}` });
   });
+  import('./services/ird.js').then((m) => m.startRetryQueue());
   setInterval(() => pollPending().catch((e) => log.warn('poll failed', { err: e.message })), config.verifyIntervalMs).unref();
 }

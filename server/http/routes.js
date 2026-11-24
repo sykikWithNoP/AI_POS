@@ -181,6 +181,22 @@ export function apiRouter() {
   r.get('/overview', ownerOrKey, (req, res) => res.json(overview.overview({ period: req.query.period || 'month', offset: Math.max(-400, Math.min(0, Number(req.query.offset) || 0)) })));
   r.get('/overview/day', ownerOrKey, (req, res) => res.json(overview.daySummary()));
 
+  // ---------- IRD (owner area) ----------
+  r.get('/ird/status', ownerRead, (req, res) => res.json(ird.status()));
+  r.post('/ird/sync-all', ownerOnly, async (req, res) => res.json(await ird.syncAll()));
+  r.post('/ird/setup', ownerOnly, (req, res) => {
+    const v = req.body || {};
+    if (!/^\d{9}$/.test(String(v.pan || ''))) throw badRequest('PAN must be 9 digits');
+    settings.setGroup('business', { pan: v.pan, ...(v.name ? { name: v.name } : {}), ...(v.address ? { address: v.address } : {}) });
+    settings.setGroup('ird', { sellerPan: v.pan, ...(v.username ? { username: v.username } : {}), ...(v.password ? { password: v.password } : {}), enabled: true, autoSync: true, ...(v.goLive ? { dryRun: false } : {}) });
+    res.json(ird.status());
+  });
+  r.get('/ird/filing-pack', ownerRead, (req, res) => {
+    const pack = ird.filingPack({ fy: req.query.fy, month: req.query.month });
+    audit('ird.filing_pack', pack.filename, pack.summary);
+    res.type('application/zip').attachment(pack.filename).send(pack.buffer);
+  });
+
   // ---------- reports (owner area) ----------
   r.get('/reports', ownerRead, (req, res) => res.json({ reports: reports.REPORTS, fiscalYears: reports.fiscalYears(), months: reports.FY_MONTHS }));
   r.get('/reports/:name', ownerOrKey, (req, res) => {

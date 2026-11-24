@@ -9,9 +9,14 @@ let offset = 0;
 let period = 'month';
 const PERIOD_LABEL = { day: 'Today', month: 'This month', year: 'This year' };
 
+let tab = 'dashboard';
 export function renderOverview(root) {
   const box = h('div.overview');
-  root.replaceChildren(box);
+  const tabs = h('div.subtabs', { role: 'tablist' }, [['dashboard', 'chart', 'Dashboard'], ['reports', 'receipt', 'Reports'], ['ird', 'shield', 'IRD']].map(([id, ic, label]) =>
+    h(`button.subtab${tab === id ? '.active' : ''}`, { role: 'tab', 'aria-selected': tab === id, onclick: () => { tab = id; renderOverview(root); } }, icon(ic, 16), label)));
+  root.replaceChildren(h('div.pos-head', tabs), box);
+  if (tab === 'reports') { import('./reports.js').then((m) => m.renderReports(box)); return () => {}; }
+  if (tab === 'ird') { import('./ird.js').then((m) => m.renderIrd(box)); return () => {}; }
   const reload = () => load(box).catch(errorToast);
   reload();
   const off = onServerEvent((e) => { if (['sale.paid', 'sale.void', 'sale.postponed'].includes(e.type)) reload(); });

@@ -10,6 +10,8 @@ process.env.DATA_DIR = dir;
 process.env.DB_FILE = path.join(dir, 'pos.db');
 const { createApp } = await import('../server/index.js');
 const { db } = await import('../server/db.js');
+const { startNotifiers } = await import('../server/notifiers.js');
+startNotifiers();
 const server = createApp().listen(0, '127.0.0.1');
 await new Promise((r) => server.once('listening', r));
 const B = `http://127.0.0.1:${server.address().port}`;
@@ -84,4 +86,30 @@ test('reports: sales register with credit notes and cancelled bills, VAT summary
   assert.equal(teaRow.cost, 4000);
   assert.equal((await ok('GET', '/api/reports/slow-moving?days=30')).days, 30);
   assert.equal((await call('GET', '/api/reports/sales-register?fy=bad')).status, 400);
+});
+
+test('IRD made easy: checklist, setup, practice sync, retry backoff, filing pack zip', async () => {
+  const st0 = await ok('GET', '/api/ird/status');
+  assert.equal(st0.ready, false);
+  await ok('POST', '/api/ird/setup', { pan: '600123456', username: 'cbms-user', password: 'cbms-pass', name: 'Test Shop' });
+  const st = await ok('GET', '/api/ird/status');
+  assert.ok(st.checks.find((c) => c.id === 'seller').ok);
+  assert.equal(st.dryRun, true); // practice mode until going live
+  const s = await ok('POST', '/api/sales', { lines: [{ name: 'Svc', unitPrice: 100, qty: 1 }] });
+  await ok('POST', `/api/sales/${s.id}/payments`, { method: 'cash', tendered: 200 });
+  await new Promise((r) => setTimeout(r, 150));
+  assert.equal((await ok('GET', `/api/sales/${s.id}`)).ird_status, 'synced');
+  // Simulate a failure and check backoff scheduling.
+  db.prepare("UPDATE sales SET ird_status = 'failed' WHERE id = ?").run(s.id);
+  const r = await ok('POST', '/api/ird/sync-all');
+  assert.ok(r.synced >= 1);
+  const res = await fetch(`${B}/api/ird/filing-pack?fy=${s.fiscal_year}`, { headers: { Cookie: COOKIE } });
+  assert.equal(res.headers.get('content-type'), 'application/zip');
+  const buf = Buffer.from(await res.arrayBuffer());
+  const { unzip } = await import('../server/util/zip.js');
+  const names = unzip(buf).map((f) => f.name);
+  assert.deepEqual(names.sort(), ['README.txt', 'credit-notes.csv', 'sales-register.csv', 'sales-register.html', 'unsynced-bills.csv', 'vat-summary.csv']);
+  const regCsv = unzip(buf).find((f) => f.name === 'sales-register.csv').data.toString();
+  assert.match(regCsv, new RegExp(s.invoice_no));
+  await ok('PUT', '/api/settings/ird', { values: { enabled: false } });
 });
