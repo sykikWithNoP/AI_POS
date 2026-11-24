@@ -17,13 +17,13 @@ export const { exportSessions, importSessions } = await import('../../server/htt
 
 const express = (await import('./shims/express.js')).default;
 const { requireAuth } = await import('../../server/http/auth.js');
-const { mobileRouter } = await import('./updates.js');
+const { mobileRouter } = await import('./routes.js');
 
 export function start() {
   selfCheck();
   startNotifiers();
   const pos = createApp();
-  // Phone-only routes (app updates) sit in front of the regular POS routes.
+  // Phone-only routes sit in front of the regular POS routes.
   const app = express();
   app.use('/api/mobile', mobileRouter(requireAuth));
   app.use(pos);

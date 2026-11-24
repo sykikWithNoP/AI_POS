@@ -8,6 +8,7 @@ Pick the one for your computer, click it, then click **Download** (the ⤓ butto
 |---|---|---|
 | Windows 10 / 11 (64-bit) | [NINDITOPOS-1.2.0-Windows-Setup.exe](NINDITOPOS-1.2.0-Windows-Setup.exe) | 22 MB |
 | Mac with Apple chip (M1–M4) | [NINDITOPOS-1.2.0-macOS-AppleSilicon.dmg](NINDITOPOS-1.2.0-macOS-AppleSilicon.dmg) | 37 MB |
+| Android phone or tablet (Android 6+) | `NINDITOPOS-Mobile-<version>-Android.apk` (built by the [Android app workflow](../.github/workflows/android-app.yml); see [mobile/README](../mobile/README.md)) | ~10 MB |
 | Mac with Intel processor | [NINDITOPOS-1.2.0-macOS-Intel.dmg](NINDITOPOS-1.2.0-macOS-Intel.dmg) | 38 MB |
 
 Nothing else needs to be installed. Each package includes the official Node.js 22.23.5 runtime (its licence is included) and the protected release build of the POS.
