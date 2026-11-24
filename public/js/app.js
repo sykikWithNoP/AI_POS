@@ -197,6 +197,7 @@ function route() {
 
 window.addEventListener('pos:locked', () => { toast('Session locked', 'warn'); setTimeout(() => location.reload(), 800); });
 window.addEventListener('pos:setup', () => location.reload());
+window.addEventListener('pos:data-changed', () => { loadItems().catch(() => {}); });
 // Owner session expired or missing: bring up the sign-in for the current owner area.
 window.addEventListener('pos:owner', async () => {
   if (!getState().boot) return;

@@ -31,6 +31,7 @@ import * as backups from '../services/backups.js';
 import * as updates from '../services/updates.js';
 import * as printer from '../services/printer.js';
 import * as migrate from '../services/migrate.js';
+import * as agent from '../services/agent.js';
 import express from 'express';
 import { allowedDestinations, egressActivity } from '../security/egress.js';
 import * as calendar from '../services/calendar.js';
@@ -295,6 +296,8 @@ export function apiRouter() {
   r.put('/extensions/:id', ownerOnly, (req, res) => res.json(exts.updateExtension(req.params.id, req.body || {})));
   r.delete('/extensions/:id', ownerOnly, (req, res) => res.json(exts.deleteExtension(req.params.id)));
   r.get('/extensions-api', ownerRead, (req, res) => res.json({ doc: ai.EXTENSION_API_DOC }));
+  r.post('/ai/agent', ownerRead, async (req, res) => res.json(await agent.send(req.body || {})));
+  r.post('/ai/agent/decide', ownerOnly, async (req, res) => res.json(await agent.decide(req.body || {})));
   r.post('/ai/chat', ownerRead, async (req, res) => res.json(await ai.chat(req.body?.messages)));
   r.post('/ai/extension', ownerOnly, async (req, res) => res.json(await ai.buildExtension(req.body?.description)));
 

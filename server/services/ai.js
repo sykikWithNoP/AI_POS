@@ -11,13 +11,22 @@ import { screenPrompt, scrubOutput, scanExtension, AI_POLICY } from '../security
 
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 
-function client() {
+export function client() {
   const cfg = getGroup('ai');
   if (!cfg.apiKey) throw badRequest('Add your Anthropic API key in Connectors → AI Copilot');
   // All traffic goes through the egress gate: the key is pinned to api.anthropic.com and the SDK's
   // platform headers (OS, CPU architecture, runtime version) are stripped before anything leaves.
   const fetchVia = (url, init) => egressFetch(url, init, { purpose: 'ai' });
   return { anthropic: new Anthropic({ apiKey: cfg.apiKey, maxRetries: 2, fetch: fetchVia }), cfg };
+}
+
+export function mapError(e) {
+  if (e instanceof HttpError) return e;
+  if (e instanceof Anthropic.AuthenticationError) return new HttpError(401, 'Anthropic rejected the API key', 'ai_auth');
+  if (e instanceof Anthropic.RateLimitError) return new HttpError(429, 'Anthropic rate limit hit, try again shortly', 'ai_rate_limit');
+  if (e instanceof Anthropic.BadRequestError) return new HttpError(400, `Anthropic: ${e.message}`, 'ai_bad_request');
+  if (e instanceof Anthropic.APIError) return new HttpError(502, `Anthropic error ${e.status ?? ''}: ${e.message}`, 'ai_error');
+  return e;
 }
 
 async function call(params) {
