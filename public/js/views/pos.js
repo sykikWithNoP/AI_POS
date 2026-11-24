@@ -6,6 +6,7 @@ import { calculateBill } from '/shared/billing.js';
 import { cartForExtensions as cartForExt, emitExt, ruleDiscounts, extensionButtons, clickExtensionButton, onRulesUpdate, settleRules, checkBeforeSale } from '../extensions.js';
 import { openCheckout } from './checkout.js';
 import { showCart, openCustomerDisplay } from '../display-link.js';
+import { device } from '../device.js';
 import { renderItemsManager } from './items.js';
 import { renderCustomers, pickCustomerDialog } from './customers.js';
 import { shiftChip } from './shift.js';
@@ -62,7 +63,7 @@ export function renderPos(root, { sub = 'sell', actions } = {}) {
 
 // Layout: items top-left · member search top-right above the bill · action bar (Membership…) bottom-left.
 function renderSell(root) {
-  const search = h('input.input.search-input', { type: 'search', placeholder: 'Search or scan barcode…  (F2)', value: query, 'aria-label': 'Search items', autocomplete: 'off' });
+  const search = h('input.input.search-input', { type: 'search', placeholder: device.keyboard ? 'Search or scan barcode…  (F2)' : 'Search or scan barcode…', value: query, 'aria-label': 'Search items', autocomplete: 'off' });
   const chips = h('div.chips');
   const grid = h('div.product-grid');
   const cartBox = h('div.cart-body');
@@ -73,7 +74,7 @@ function renderSell(root) {
     h('button.btn', { onclick: addOpenItem }, icon('plus', 16), 'Custom item'),
     h('button.btn', { onclick: () => discountDialog(getState().cart.cartDiscount, (d) => dispatch({ type: 'cart/discount', discount: d })) }, icon('tag', 16), 'Discount'),
     h('button.btn', { onclick: () => import('./shift.js').then((m) => m.drawerDialog()) }, icon('wallet', 16), 'Cash drawer'),
-    h('button.btn', { title: 'Open a window for a screen facing the customer', onclick: () => { if (!openCustomerDisplay()) toast('Allow pop-ups for the POS to open the customer screen', 'warn'); } }, icon('grid', 16), 'Customer screen'));
+    device.kind === 'computer' && !device.app ? h('button.btn', { title: 'Open a window for a screen facing the customer', onclick: () => { if (!openCustomerDisplay()) toast('Allow pop-ups for the POS to open the customer screen', 'warn'); } }, icon('grid', 16), 'Customer screen') : null);
   const left = h('section.catalog', toolbar, chips, grid, actionBar);
   const right = h('aside.cart', { 'aria-label': 'Current bill' }, memberSearch(), tabs, cartBox);
   root.append(h('div.sell', left, right));
@@ -165,7 +166,7 @@ async function closeSession(x) {
 
 /** Top-right: find a member/customer and attach them to the current bill. */
 function memberSearch() {
-  const input = h('input.input', { type: 'search', placeholder: 'Search members / customers…  (F3)', 'aria-label': 'Search members', autocomplete: 'off' });
+  const input = h('input.input', { type: 'search', placeholder: device.keyboard ? 'Search members / customers…  (F3)' : 'Search members / customers…', 'aria-label': 'Search members', autocomplete: 'off' });
   const results = h('ul.member-results', { hidden: true });
   const current = h('div.member-current');
   const wrap = h('div.member-search', h('div.search-wrap', icon('user', 18), input), results, current);
@@ -326,7 +327,7 @@ function drawCart(box) {
         c.id && getState().boot.settings.loyalty.enabled ? h('button.btn.sm.ghost', { onclick: redeemDialog }, '🎁', cart.redeemPoints ? `${cart.redeemPoints} pts` : 'Points') : null,
       ),
       totals,
-      h('button.btn.primary.pay', { disabled: !cart.lines.length, onclick: checkout }, h('span', 'Charge'), h('b', money(t.total)), h('kbd', 'F9'))));
+      h('button.btn.primary.pay', { disabled: !cart.lines.length, onclick: checkout }, h('span', 'Charge'), h('b', money(t.total)), device.keyboard ? h('kbd', 'F9') : null)));
 }
 
 let checkingOut = false;

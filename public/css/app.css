@@ -107,6 +107,7 @@ p.brand-product { color: var(--accent); margin: 0; text-align: center; }
 .small-note { font-size: 13px; margin: 0; }
 
 /* ---------- controls ---------- */
+[hidden] { display: none !important; }
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface); cursor: pointer; font-weight: 550; text-decoration: none; color: var(--text); white-space: nowrap; }
 .btn:hover:not(:disabled) { border-color: var(--accent); }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
@@ -574,6 +575,13 @@ label.icon-btn input[type=file] { display: none; }
 .tour-tip { position: fixed; max-width: 270px; background: var(--surface); color: var(--text); border-radius: 12px; padding: 10px 12px; display: flex; gap: 10px; align-items: flex-start; box-shadow: 0 10px 30px rgb(0 0 0 / .3); }
 .tour-n { flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; }
 .tour-done { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); }
+@media (max-width: 560px) {
+  .wz-foot { display: grid; grid-template-columns: 1fr 1fr; }
+  .wz-foot .spacer { display: none; }
+  .wz-foot .btn:not(.ghost) { justify-content: center; }
+  .wz-foot .btn.ghost { grid-column: 1 / -1; grid-row: 2; justify-self: center; }
+  .wz-foot .btn[hidden] + .btn { grid-column: 1 / -1; }
+}
 @media (max-width: 700px) { .wz-item { grid-template-columns: 1fr 1fr; } .wz-item input:last-child { grid-column: 1 / -1; } .wz-card { padding: 18px 16px; } }
 
 /* ---------- help panel ---------- */

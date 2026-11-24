@@ -16,6 +16,10 @@ import { renderSettings } from './views/settings.js';
 
 import { SITEMAP, current, href, remember, replace } from './router.js';
 import { BRAND } from '/shared/brand.js';
+import { device, applyDeviceClasses } from './device.js';
+
+/** Bigger touch buttons: on for phones and tablets automatically, or when chosen in Appearance. */
+const touchOn = (boot) => !!boot.settings.ui.touchMode || device.kind !== 'computer';
 
 const RENDER = { pos: renderPos, overview: renderOverview, connectors: renderConnectors, settings: renderSettings };
 const NAV = SITEMAP;
@@ -33,7 +37,8 @@ async function start() {
   const boot = await get('/api/bootstrap');
   dispatch({ type: 'boot', boot });
   applyTheme(boot.settings.ui.theme, boot.customTheme);
-  document.body.classList.toggle('touch', !!boot.settings.ui.touchMode);
+  applyDeviceClasses();
+  document.body.classList.toggle('touch', touchOn(boot));
   loadExtensions(boot.extensions);
   await loadItems();
   await syncDrafts();
@@ -205,7 +210,7 @@ function renderShell() {
   drawBell();
   subscribe((s, prev) => {
     if (s.notifications !== prev.notifications) drawBell();
-    if (s.boot !== prev.boot) { document.querySelector('.brand-name').textContent = s.boot.settings.business.name; drawOwner(); document.body.classList.toggle('touch', !!s.boot.settings.ui.touchMode); }
+    if (s.boot !== prev.boot) { document.querySelector('.brand-name').textContent = s.boot.settings.business.name; drawOwner(); document.body.classList.toggle('touch', touchOn(s.boot)); }
   });
 
   document.addEventListener('keydown', (e) => {

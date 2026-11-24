@@ -4,6 +4,7 @@ import { get, post } from '../api.js';
 import { getState } from '../store.js';
 import { openCheckout, printReceipt } from './checkout.js';
 import { onServerEvent } from '../live.js';
+import { device } from '../device.js';
 
 let offset = 0;
 let period = 'month';
@@ -225,11 +226,11 @@ async function copyText(text) {
   catch { modal({ title: 'Copy this link', body: h('pre.code.select', text) }); }
 }
 
-/** Weekly nudge to copy a backup off this computer. */
+/** Weekly nudge to copy a backup off this device. */
 function backupNudge() {
   const r = getState().boot.backupReminder;
   if (!r?.due) return null;
-  const dev = globalThis.__POS_MOBILE__ ? 'phone' : 'computer';
+  const dev = device.word;
   return h('div.nudge', icon('download', 18),
     h('span', r.days === null ? `You have never saved a backup off this ${dev}. ` : `Your last backup copy off this ${dev} was ${r.days} days ago. `, `If the ${dev} breaks, that copy is how you get everything back.`),
     h('a.btn.sm.primary', { href: '#/settings/data' }, globalThis.__POS_MOBILE__ ? 'Save a backup' : 'Back up to USB'));

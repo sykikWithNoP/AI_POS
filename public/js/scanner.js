@@ -3,6 +3,7 @@
 //     anywhere on the POS — the search box doesn't need focus.
 //  2. Camera scanning with the browser's BarcodeDetector (Chrome/Edge; works on localhost).
 import { h, icon, modal, toast, chime } from './ui.js';
+import { thisDevice } from './device.js';
 import { getState } from './store.js';
 
 let handler = null;
@@ -42,7 +43,7 @@ export const cameraSupported = () => 'BarcodeDetector' in window && !!navigator.
 
 /** Camera scanner modal; keeps scanning until closed (each code once per 2 s). */
 export async function cameraScan() {
-  if (!cameraSupported()) return toast('Camera scanning needs Chrome or Edge on this computer', 'warn', 5000);
+  if (!cameraSupported()) return toast(`Camera scanning isn't supported by this browser on ${thisDevice()} — use Chrome or Edge`, 'warn', 5000);
   let stream;
   try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }); }
   catch { return toast('Camera permission was refused', 'error'); }

@@ -4,6 +4,7 @@ import { get, put, post, del } from '../api.js';
 import { getState, dispatch } from '../store.js';
 import { loadedExtensions, reloadExtensions } from '../extensions.js';
 import { showOwnerKey, ownerSignOut } from '../owner.js';
+import { device, thisDevice } from '../device.js';
 import { applyTheme, THEMES, VAR_KEYS, paletteFromImage, paletteFromHue, prepareImage, setImageVars, contrast } from '../theme.js';
 
 /** Settings sub-pages. Each one is a column of cards with its own Save button. */
@@ -264,7 +265,7 @@ function backupCard() {
   load().catch(errorToast);
   return h('section.card',
     h('header.card-head', h('h3', icon('download', 18), 'Backups & restore'), h('button.btn.sm.primary', { onclick: async () => { try { await post('/api/backups'); toast('Backup made', 'success'); load(); } catch (e) { errorToast(e); } } }, 'Back up now')),
-    h('p.hint', 'Automatic backups are kept on this computer. Copy one to a USB stick every week (below).'),
+    h('p.hint', `Automatic backups are kept on ${thisDevice()}. ${device.app ? 'Save one off it' : 'Copy one to a USB stick'} every week (below).`),
     status,
     h('div.form-grid.two', h('label.toggle', auto, h('span.track'), h('span', 'Automatic backups')), field('How often', every), field('Keep how many', keep),
       h('div', h('button.btn', { style: { marginTop: '22px' }, onclick: async () => {
@@ -481,9 +482,10 @@ function appearanceCard() {
   const grid = h('div.theme-grid');
   const sound = h('input', { type: 'checkbox', checked: getState().boot.settings.ui.sound !== false });
   sound.addEventListener('change', () => put('/api/settings/ui', { values: { sound: sound.checked } }).catch(errorToast));
-  const touch = h('input', { type: 'checkbox', checked: !!getState().boot.settings.ui.touchMode });
+  const auto = device.kind !== 'computer';
+  const touch = h('input', { type: 'checkbox', checked: auto || !!getState().boot.settings.ui.touchMode, disabled: auto });
   touch.addEventListener('change', async () => {
-    document.body.classList.toggle('touch', touch.checked);
+    document.body.classList.toggle('touch', touch.checked || auto);
     try { await put('/api/settings/ui', { values: { touchMode: touch.checked } }); dispatch({ type: 'boot', boot: await get('/api/bootstrap') }); } catch (e) { errorToast(e); }
   });
 
@@ -530,7 +532,7 @@ function appearanceCard() {
   }
   draw();
   return h('section.card',
-    h('header.card-head', h('h3', icon('moon', 18), 'Appearance'), h('div.row-actions', h('label.toggle', touch, h('span.track'), h('span', 'Touch mode (bigger buttons)')), h('label.toggle', sound, h('span.track'), h('span', 'Payment chime')))),
+    h('header.card-head', h('h3', icon('moon', 18), 'Appearance'), h('div.row-actions', h('label.toggle', { title: `Detected: ${device.label}` }, touch, h('span.track'), h('span', auto ? `Touch mode — on for this ${device.word}` : 'Touch mode (bigger buttons)')), h('label.toggle', sound, h('span.track'), h('span', 'Payment chime')))),
     h('p.hint', 'Pick one of 15 themes, or create your own from a picture — the POS reads its colours, picks a readable accent, and can show the picture behind the screens.'),
     grid);
 }

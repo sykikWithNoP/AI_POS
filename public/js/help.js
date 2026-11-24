@@ -1,15 +1,18 @@
 // "?" help panel: short, plain-language steps for the page you are on, with a link into the full guide.
 import { h, icon } from './ui.js';
 import { current } from './router.js';
+import { device, thisDevice } from './device.js';
+
+const KEYS = device.keyboard;
 
 const G = (anchor) => `/guide#${anchor}`;
 
 const HELP = {
   'pos/sell': { title: 'Selling', guide: G('6-a-normal-day'), steps: [
-    'Tap a product, type its name in the search box (F2), or scan its barcode.',
-    'Optional: find the customer in the box at the top right (F3). Members get their discount automatically.',
-    'Press Charge (F9), choose how they pay and finish. Print the receipt or show the bill QR.',
-    'Serving someone else meanwhile? Click "+ New" above the bill. Open bills are kept even if the computer restarts.',
+    `Tap a product, type its name in the search box${KEYS ? ' (F2)' : ''}, or scan its barcode.`,
+    `Optional: find the customer in the customer box${KEYS ? ' (F3)' : ''}. Members get their discount automatically.`,
+    `Press Charge${KEYS ? ' (F9)' : ''}, choose how they pay and finish. Print or share the receipt, or show the bill QR.`,
+    `Serving someone else meanwhile? ${device.touch ? "Tap" : "Click"} "+ New" above the bill. Open bills are kept even if ${thisDevice()} restarts.`,
     'Start the day with "Open shift" (top right) and end it with "Close shift" to count the cash.',
   ], tour: true },
   'pos/items': { title: 'Your products', guide: G('7-your-products-pos-items'), steps: [
@@ -83,7 +86,7 @@ export function toggleHelp() {
     h('div.row-actions',
       info.tour ? h('button.btn', { onclick: async () => { panel.remove(); (await import('./welcome.js')).sellTour(); } }, icon('sparkles', 16), 'Show me around') : null,
       h('a.btn.primary', { href: info.guide || '/guide', target: '_blank', rel: 'noopener' }, 'Open the full guide')),
-    h('p.muted', 'Keys: F2 search · F3 customer · F9 charge · Alt+1–4 pages · Alt+[ ] tabs · Esc close'));
+    KEYS ? h('p.muted', 'Keys: F2 search · F3 customer · F9 charge · Alt+1–4 pages · Alt+[ ] tabs · Esc close') : h('p.muted', `Detected: ${device.label}. Screens are adjusted for it.`));
   document.body.append(panel);
   const away = (e) => { if (!panel.contains(e.target) && !e.target.closest('.help-btn')) { panel.remove(); document.removeEventListener('mousedown', away); } };
   setTimeout(() => document.addEventListener('mousedown', away), 0);
