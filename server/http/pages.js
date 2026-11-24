@@ -42,7 +42,7 @@ export function pagesRouter() {
     const isTaxInvoice = tax.rate > 0 && biz.pan;
     const status = { paid: ['Paid', 'ok'], pending: ['Payment pending', 'warn'], void: ['Cancelled', 'bad'] }[sale.status];
     const body = `
-<main class="bill">
+<main class="bill${req.query.w === '58' ? ' receipt58' : req.query.w === '80' ? ' receipt80' : ''}">
   <header>
     ${biz.logoUrl ? `<img class="logo" src="${esc(biz.logoUrl)}" alt="">` : ''}
     <h1>${esc(biz.name)}</h1>

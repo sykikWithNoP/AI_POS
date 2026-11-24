@@ -36,6 +36,8 @@ export const DEFAULTS = {
   memberships: { defaultPlanId: 0 },
   privacy: { offline: false },
   backup: { auto: true, everyHours: 24, keep: 14 },
+  printer: { mode: 'browser', host: '', port: 9100, queue: '', width: 48, autoPrint: false, openDrawer: true, printQr: true, copies: 1, paper: '80' },
+  scanner: { beep: true, minLength: 4, maxGapMs: 35 },
 };
 
 export const SECRET_FIELDS = {

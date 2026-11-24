@@ -47,5 +47,9 @@ export function startNotifiers() {
     });
   });
 
+  subscribe(async ({ type, payload }) => {
+    if (type === 'sale.paid') await (await import('./services/printer.js')).onSalePaid(payload.sale);
+  });
+
   log.info('notifiers started');
 }

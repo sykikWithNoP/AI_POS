@@ -29,6 +29,7 @@ export async function drawerDialog() {
     title: 'Cash drawer', wide: true,
     body: reportView(r),
     actions: [
+      { label: 'Open drawer', onClick: async () => { try { await post('/api/print/drawer'); toast('Drawer opened (logged)', 'success'); } catch (e) { errorToast(e); } } },
       { label: 'Pay in', onClick: () => moveDialog('in', () => { m.close(); drawerDialog(); }) },
       { label: 'Pay out', onClick: () => moveDialog('out', () => { m.close(); drawerDialog(); }) },
       { label: 'Print X report', onClick: () => printReport('X report', r) },

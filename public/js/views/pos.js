@@ -8,6 +8,8 @@ import { openCheckout } from './checkout.js';
 import { renderItemsManager } from './items.js';
 import { renderCustomers, pickCustomerDialog } from './customers.js';
 import { shiftChip } from './shift.js';
+import { onScan, cameraButton } from '../scanner.js';
+import { post } from '../api.js';
 
 let tab = 'sell';
 let category = '';
@@ -67,7 +69,7 @@ function renderSell(root) {
   const grid = h('div.product-grid');
   const cartBox = h('div.cart-body');
   const tabs = h('div.session-tabs', { role: 'tablist', 'aria-label': 'Open bills' });
-  const toolbar = h('div.pos-toolbar', h('div.search-wrap', icon('search', 18), search), h('div.ext-buttons'));
+  const toolbar = h('div.pos-toolbar', h('div.search-wrap', icon('search', 18), search), cameraButton(), h('div.ext-buttons'));
   const actionBar = h('div.action-bar',
     h('button.btn.member-btn', { onclick: membershipAction, title: 'Sell or manage a membership' }, '★', 'Membership'),
     h('button.btn', { onclick: addOpenItem }, icon('plus', 16), 'Custom item'),
@@ -145,8 +147,14 @@ function renderSell(root) {
     if (e.key === 'F9' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) { e.preventDefault(); checkout(); }
   };
   document.addEventListener('keydown', onKey);
+  // Scanner: works from anywhere on the sell screen.
+  const offScan = onScan((code) => {
+    const item = getState().items.find((i) => i.barcode === code || (i.sku && i.sku.toLowerCase() === code.toLowerCase()));
+    if (item) { addToCart(item); return; }
+    toast(`Unknown barcode ${code}`, 'warn', 6000);
+  });
   setTimeout(() => search.focus(), 0);
-  return () => { unsub(); document.removeEventListener('keydown', onKey); };
+  return () => { unsub(); offScan(); document.removeEventListener('keydown', onKey); };
 }
 
 async function closeSession(x) {

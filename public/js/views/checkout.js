@@ -188,7 +188,7 @@ export function openCheckout(cart, totals, { sale: existing } = {}) {
       sale.change_due ? h('div.change-big', 'Change: ', h('b', money(sale.change_due))) : null,
       h('p.muted', `${sale.invoice_no} · ${sale.payment_method}`),
       h('div.row-actions',
-        h('button.btn', { onclick: () => window.open(`/b/${sale.public_token}?print=1`, '_blank', 'width=420,height=720') }, icon('printer', 16), 'Print receipt'),
+        h('button.btn', { onclick: () => printReceipt(sale) }, icon('printer', 16), 'Print receipt'),
         h('button.btn', { onclick: () => { navigator.clipboard?.writeText(link); toast('Bill link copied', 'success'); } }, icon('link', 16), 'Copy e-bill link'),
         h('button.btn.primary', { onclick: () => m.close() }, icon('plus', 16), 'New sale (Enter)'))));
     const onEnter = (e) => { if (e.key === 'Enter') { document.removeEventListener('keydown', onEnter); m.close(); } };
@@ -216,4 +216,14 @@ function postForm(win, { action, fields }) {
   }
   doc.body.append(form);
   form.submit();
+}
+
+/** Print via the configured receipt printer, or the browser's printable receipt. */
+export async function printReceipt(sale) {
+  const p = getState().boot.settings.printer || {};
+  if (p.mode && p.mode !== 'browser') {
+    try { await post(`/api/print/sale/${sale.id}`); toast('Sent to the receipt printer', 'success'); return; }
+    catch (e) { toast(`${e.message} — opening browser print instead`, 'warn', 5000); }
+  }
+  window.open(`/b/${sale.public_token}?print=1&w=${p.paper || '80'}`, '_blank', 'width=420,height=720');
 }

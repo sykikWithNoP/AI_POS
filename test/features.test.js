@@ -176,3 +176,34 @@ test('updater: apply, keep previous, auto-rollback, manual rollback', async () =
   assert.equal(up.cmp('1.10.0', '1.9.9'), 1);
   fs.rmSync(root, { recursive: true, force: true });
 });
+
+test('receipt printer: ESC/POS bytes to a LAN printer, drawer kick, internet refused', async () => {
+  const net = await import('node:net');
+  const { isLocalAddress, receiptFor, Receipt } = await import('../server/services/printer.js');
+  assert.equal(isLocalAddress('192.168.1.50'), true);
+  assert.equal(isLocalAddress('10.0.0.9'), true);
+  assert.equal(isLocalAddress('8.8.8.8'), false);
+  assert.equal(isLocalAddress('printer.example.com'), false);
+  // A fake printer on port N captures what the POS sends.
+  const got = [];
+  const fake = net.createServer((sock) => { const chunks = []; sock.on('data', (d) => chunks.push(d)); sock.on('end', () => got.push(Buffer.concat(chunks))); });
+  await new Promise((r) => fake.listen(0, '127.0.0.1', r));
+  await ok('PUT', '/api/settings/printer', { values: { mode: 'network', host: '127.0.0.1', port: fake.address().port, width: 32 } });
+  const s = await ok('POST', '/api/sales', { lines: [{ name: 'Momo plate', unitPrice: 180, qty: 2 }] });
+  await ok('POST', `/api/sales/${s.id}/payments`, { method: 'cash', tendered: 500 });
+  await ok('POST', `/api/print/sale/${s.id}`);
+  await ok('POST', '/api/print/drawer');
+  await new Promise((r) => setTimeout(r, 200));
+  const receipt = got.find((b) => b.includes(Buffer.from(s.invoice_no)));
+  assert.ok(receipt, 'receipt reached the printer');
+  assert.deepEqual([...receipt.subarray(0, 2)], [0x1b, 0x40]); // ESC @ init
+  assert.ok(receipt.includes(Buffer.from([0x1d, 0x56, 0x42]))); // cut
+  assert.ok(got.some((b) => b.includes(Buffer.from([0x1b, 0x70, 0, 25, 250])))); // drawer kick
+  assert.ok(receipt.toString('latin1').split('\n').every((l) => l.replace(/[\x00-\x1f]/g, '').length <= 40));
+  await ok('PUT', '/api/settings/printer', { values: { host: '8.8.8.8' } });
+  assert.equal((await call('POST', '/api/print/test')).status, 400);
+  await ok('PUT', '/api/settings/printer', { values: { mode: 'browser' } });
+  assert.ok(new Receipt(32).qr('http://x/b/abc').build().length > 20);
+  assert.ok(receiptFor(await ok('GET', `/api/sales/${s.id}`)).length > 100);
+  fake.close();
+});

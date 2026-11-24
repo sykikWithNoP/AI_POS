@@ -35,7 +35,7 @@ export function createApp() {
       ].join('; '),
       'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'SAMEORIGIN',
       'Cross-Origin-Resource-Policy': 'same-origin',
-      'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), usb=(), payment=()',
+      'Permissions-Policy': 'camera=(self), microphone=(), geolocation=(), usb=(), payment=()',
       'X-Robots-Tag': 'noindex, nofollow, noarchive, nosnippet, noai, noimageai',
     });
     next();

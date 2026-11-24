@@ -30,6 +30,16 @@ const SPECS = [
   { group: 'ai', title: 'AI Copilot', icon: 'sparkles', section: 'Productivity', desc: 'Bring your own Anthropic API key for the copilot and the AI feature builder. The key stays on this PC.',
     fields: [{ name: 'apiKey', type: 'secret', label: 'Anthropic API key' }, { name: 'model', label: 'Model', hint: 'Leave as it is unless you need a different model' },
       { name: 'effort', type: 'select', label: 'Effort', options: ['low', 'medium', 'high', 'xhigh', 'max'], hint: 'Higher = more thorough, slower, more tokens' }], test: true },
+  { group: 'printer', title: 'Receipt printer', icon: 'printer', section: 'Devices', desc: 'Print receipts automatically and open the cash drawer on cash sales.',
+    fields: [{ name: 'mode', type: 'select', label: 'Connection', options: ['browser', 'network', 'system'], hint: 'browser = print dialog · network = LAN printer (IP, port 9100) · system = USB printer queue' },
+      { name: 'host', label: 'Printer IP (network)', hint: 'Local network only, e.g. 192.168.1.50' }, { name: 'port', type: 'number', label: 'Port (network)' },
+      { name: 'queue', label: 'Printer / share name (system)', hint: 'macOS/Linux: printer name from lpstat · Windows: share the printer and enter its share name' },
+      { name: 'width', type: 'select', label: 'Characters per line', options: ['48', '42', '32'], hint: '48 for 80 mm, 32 for 58 mm' },
+      { name: 'paper', type: 'select', label: 'Browser receipt width (mm)', options: ['80', '58'] },
+      { name: 'autoPrint', type: 'toggle', label: 'Print automatically after each paid sale' }, { name: 'openDrawer', type: 'toggle', label: 'Open the cash drawer on cash sales' },
+      { name: 'printQr', type: 'toggle', label: 'Print e-bill QR (needs Public URL)' }, { name: 'copies', type: 'number', label: 'Copies' }], extra: printerExtra },
+  { group: 'scanner', title: 'Barcode scanner', icon: 'qr', section: 'Devices', desc: 'USB/Bluetooth scanners work anywhere on the sell screen. The camera button scans with a webcam (Chrome/Edge).',
+    fields: [{ name: 'beep', type: 'toggle', label: 'Beep on scan' }, { name: 'minLength', type: 'number', label: 'Shortest barcode length' }, { name: 'maxGapMs', type: 'number', label: 'Max ms between scanner keystrokes', hint: 'Raise if scans are missed; lower if fast typing is mistaken for a scan' }], extra: scannerExtra },
   { group: 'telegram', title: 'Telegram alerts', icon: 'send', section: 'Productivity', desc: 'Get a message on your phone for every paid sale.',
     fields: [{ name: 'enabled', type: 'toggle', label: 'Enabled' }, { name: 'botToken', type: 'secret', label: 'Bot token (from @BotFather)' }, { name: 'chatId', label: 'Chat ID' }, { name: 'notifyPaid', type: 'toggle', label: 'Notify on paid sales' }], test: true },
 ];
@@ -46,7 +56,7 @@ export function renderConnectors(root) {
     h('section', h('h2.section-title', 'Developer'), h('div.conn-grid.wide', apiKeysCard(), outboundCard()))));
 }
 
-const isOn = (spec, cfg) => (spec.group === 'google' ? getState().boot.google.connected : spec.group === 'ai' ? cfg.apiKeySet : cfg.enabled);
+const isOn = (spec, cfg) => (spec.group === 'google' ? getState().boot.google.connected : spec.group === 'ai' ? cfg.apiKeySet : spec.group === 'printer' ? cfg.mode !== 'browser' : spec.group === 'scanner' ? true : cfg.enabled);
 
 function connectorCard(spec, cfg) {
   const form = h('form.conn-form', { onsubmit: (e) => e.preventDefault() });
@@ -55,7 +65,7 @@ function connectorCard(spec, cfg) {
     let el;
     if (f.type === 'toggle') { el = h('input', { type: 'checkbox', checked: !!cfg[f.name] }); form.append(h('label.toggle', el, h('span.track'), h('span', f.label))); }
     else {
-      if (f.type === 'select') el = h('select.input', f.options.map((o) => h('option', { value: o, selected: cfg[f.name] === o }, o)));
+      if (f.type === 'select') el = h('select.input', f.options.map((o) => h('option', { value: o, selected: String(cfg[f.name]) === o }, o)));
       else if (f.type === 'image') el = imageInput(cfg[f.name]);
       else if (f.type === 'secret') el = h('input.input', { type: 'password', autocomplete: 'off', placeholder: cfg[`${f.name}Set`] ? "Saved (hidden) — type to replace" : 'Not set' });
       else el = h('input.input', { type: f.type === 'number' ? 'number' : 'text', step: 'any', value: cfg[f.name] ?? '' });
@@ -172,4 +182,17 @@ function outboundCard() {
   return h('article.conn-card',
     h('header.conn-head', h('div.conn-icon', icon('send', 22)), h('div', h('h3', 'Outbound webhooks'), h('p.muted', 'Push POS events (sale paid, item changed…) to your own services, signed with HMAC.')), null),
     list, h('footer.conn-actions', h('button.btn.primary', { onclick: create }, icon('plus', 14), 'New webhook')));
+}
+
+function printerExtra() {
+  return h('div.row-actions',
+    h('button.btn.sm', { type: 'button', onclick: async () => { try { await post('/api/print/test'); toast('Test page sent', 'success'); } catch (e) { errorToast(e); } } }, icon('printer', 14), 'Test print'),
+    h('button.btn.sm', { type: 'button', onclick: async () => { try { await post('/api/print/drawer'); toast('Drawer opened', 'success'); } catch (e) { errorToast(e); } } }, icon('wallet', 14), 'Open drawer'));
+}
+
+function scannerExtra() {
+  const out = h('code', '—');
+  const area = h('input.input', { placeholder: 'Click here and scan something to test', 'aria-label': 'Scanner test' });
+  area.addEventListener('keydown', (e) => { if (e.key === 'Enter') { out.textContent = area.value || '—'; area.value = ''; } });
+  return h('div.extra', area, h('small.muted', 'Last scan: ', out));
 }

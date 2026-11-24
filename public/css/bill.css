@@ -29,3 +29,12 @@ button { padding: 10px 18px; border-radius: 8px; border: 1px solid #ccc; backgro
   .bill { box-shadow: none; margin: 0; max-width: none; padding: 0; }
   @page { margin: 8mm; }
 }
+
+/* Narrow receipt printing from the browser (58 mm / 80 mm roll). */
+@media print {
+  .receipt80, .receipt58 { font-size: 11px; padding: 0; }
+  .receipt80 { width: 72mm; } .receipt58 { width: 48mm; }
+  .receipt80 .meta, .receipt58 .meta { grid-template-columns: 1fr; gap: 2px; }
+  .receipt80 .totals, .receipt58 .totals { max-width: none; }
+  .receipt80 .qr svg, .receipt58 .qr svg { width: 80px; height: 80px; }
+}

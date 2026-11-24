@@ -2,7 +2,7 @@
 import { h, icon, money, fmtDate, toast, errorToast, modal, confirmDialog, promptDialog, empty, badge, debounce } from '../ui.js';
 import { get, post } from '../api.js';
 import { getState } from '../store.js';
-import { openCheckout } from './checkout.js';
+import { openCheckout, printReceipt } from './checkout.js';
 import { onServerEvent } from '../live.js';
 
 let offset = 0;
@@ -167,7 +167,7 @@ async function billDialog(id, refresh) {
       s.void_reason ? h('p.danger-text', `Void: ${s.void_reason}`) : null),
     actions: [
       { label: 'Open e-bill', onClick: () => window.open(`/b/${s.public_token}`, '_blank') },
-      { label: 'Print', onClick: () => window.open(`/b/${s.public_token}?print=1`, '_blank', 'width=420,height=720') },
+      { label: 'Print', onClick: () => printReceipt(s) },
       { label: 'Copy link', onClick: () => { navigator.clipboard?.writeText(link); toast('Link copied', 'success'); } },
       ...(s.status === 'paid' && s.refunded < s.total ? [{ label: 'Refund items', onClick: (c) => { c(); refundDialog(s, refresh); } }] : []),
       ...(s.status === 'pending' ? [{ label: 'Collect payment', primary: true, onClick: (c) => { c(); openCheckout(null, null, { sale: s }); } }] : []),
