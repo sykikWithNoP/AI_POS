@@ -238,8 +238,8 @@ CREATE TABLE IF NOT EXISTS notifications (
 
 // Additive column migrations for databases created by earlier versions.
 const COLUMNS = {
-  sales: { postponed: 'INTEGER NOT NULL DEFAULT 0', due_date: 'TEXT', member_discount: 'INTEGER NOT NULL DEFAULT 0', customer_id: 'INTEGER REFERENCES customers(id)', shift_id: 'INTEGER REFERENCES shifts(id)', refunded: 'INTEGER NOT NULL DEFAULT 0', points_earned: 'INTEGER NOT NULL DEFAULT 0', points_redeemed: 'INTEGER NOT NULL DEFAULT 0' },
-  sale_items: { refunded_qty: 'REAL NOT NULL DEFAULT 0', membership_plan_id: 'INTEGER REFERENCES membership_plans(id)' },
+  sales: { imported: 'INTEGER NOT NULL DEFAULT 0', import_ref: 'TEXT', postponed: 'INTEGER NOT NULL DEFAULT 0', due_date: 'TEXT', member_discount: 'INTEGER NOT NULL DEFAULT 0', customer_id: 'INTEGER REFERENCES customers(id)', shift_id: 'INTEGER REFERENCES shifts(id)', refunded: 'INTEGER NOT NULL DEFAULT 0', points_earned: 'INTEGER NOT NULL DEFAULT 0', points_redeemed: 'INTEGER NOT NULL DEFAULT 0' },
+  sale_items: { unit_cost: 'INTEGER', refunded_qty: 'REAL NOT NULL DEFAULT 0', membership_plan_id: 'INTEGER REFERENCES membership_plans(id)' },
   items: { options: 'TEXT' },
   customers: { plan_id: 'INTEGER REFERENCES membership_plans(id)', member_since: 'TEXT', member_until: 'TEXT' },
   payments: { shift_id: 'INTEGER REFERENCES shifts(id)' },

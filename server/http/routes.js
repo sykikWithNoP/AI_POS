@@ -26,6 +26,7 @@ import * as shifts from '../services/shifts.js';
 import * as refunds from '../services/refunds.js';
 import * as themes from '../services/themes.js';
 import * as stock from '../services/stock.js';
+import * as reports from '../services/reports.js';
 import { allowedDestinations, egressActivity } from '../security/egress.js';
 import * as calendar from '../services/calendar.js';
 import * as stripe from '../providers/stripe.js';
@@ -179,6 +180,15 @@ export function apiRouter() {
   // ---------- overview ----------
   r.get('/overview', ownerOrKey, (req, res) => res.json(overview.overview({ period: req.query.period || 'month', offset: Math.max(-400, Math.min(0, Number(req.query.offset) || 0)) })));
   r.get('/overview/day', ownerOrKey, (req, res) => res.json(overview.daySummary()));
+
+  // ---------- reports (owner area) ----------
+  r.get('/reports', ownerRead, (req, res) => res.json({ reports: reports.REPORTS, fiscalYears: reports.fiscalYears(), months: reports.FY_MONTHS }));
+  r.get('/reports/:name', ownerOrKey, (req, res) => {
+    const data = reports.run(req.params.name, req.query);
+    if (req.query.format !== 'csv') return res.json(data);
+    const rows = req.params.name === 'vat-summary' ? data.months : data.rows;
+    res.type('text/csv').attachment(`${req.params.name}${data.fy ? '-' + data.fy : ''}.csv`).send(toCsv(rows, reports.csvColumns(req.params.name)));
+  });
 
   // ---------- settings & connectors ----------
   r.get('/settings', ownerRead, (req, res) => res.json(settings.publicSettings()));

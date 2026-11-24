@@ -39,7 +39,7 @@ function buildLines(inputLines) {
       if (!row) throw badRequest(`Item ${l.itemId} no longer exists`);
       const item = { ...row, options: row.options ? JSON.parse(row.options) : [] };
       const priced = priceWithOptions(item, l.options);
-      return { itemId: item.id, name: priced.name, qty, unitPrice: priced.unitPrice, taxRate: item.tax_rate, discount: parseDiscount(l.discount) };
+      return { itemId: item.id, name: priced.name, qty, unitPrice: priced.unitPrice, unitCost: item.cost || 0, taxRate: item.tax_rate, discount: parseDiscount(l.discount) };
     }
     // Open/custom line (e.g. "Misc"), priced by the cashier.
     const name = String(l.name || '').trim();
@@ -109,8 +109,8 @@ export function createSale(input, ctx = {}) {
       str(input.notes, 500), randomToken(18), ird.enabled ? 'pending' : 'off', now.toISOString(), customerId, currentShiftId(), bill.redeem.points, bill.member?.amount || 0);
     const saleId = Number(r.lastInsertRowid);
     if (bill.redeem.points) adjustPoints(customerId, -bill.redeem.points);
-    const ins = db.prepare('INSERT INTO sale_items (sale_id, item_id, name, qty, unit_price, discount, tax_rate, tax, total, membership_plan_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-    for (const l of bill.lines) ins.run(saleId, l.itemId, l.name, l.qty, l.unitPrice, l.lineDiscount + l.cartDiscountShare, l.taxRate, l.tax, l.total, l.membershipPlanId || null);
+    const ins = db.prepare('INSERT INTO sale_items (sale_id, item_id, name, qty, unit_price, discount, tax_rate, tax, total, membership_plan_id, unit_cost) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    for (const l of bill.lines) ins.run(saleId, l.itemId, l.name, l.qty, l.unitPrice, l.lineDiscount + l.cartDiscountShare, l.taxRate, l.tax, l.total, l.membershipPlanId || null, l.unitCost ?? null);
     // Sign the issued bill: from here its numbers and lines are frozen.
     appendLedger('sale.issued', saleId, saleSnapshot(saleId));
     return getSale(saleId);
