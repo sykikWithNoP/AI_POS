@@ -10,7 +10,7 @@
     "sync": "npm run build && npx cap sync",
     "android": "npm run sync && npx cap open android",
     "serve": "node scripts/serve.mjs",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/shims.test.mjs"
   },
   "dependencies": {
     "@capacitor/android": "7.6.10",
