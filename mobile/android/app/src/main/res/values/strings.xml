@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">NINDITO POS</string>
+    <string name="title_activity_main">NINDITO POS</string>
+    <string name="package_name">com.nindito.pos.mobile</string>
+    <string name="custom_url_scheme">com.nindito.pos.mobile</string>
+</resources>

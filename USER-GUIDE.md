@@ -60,6 +60,13 @@ From now on, open it with the **NINDITO POS** icon on your desktop or in the Sta
 
 Tip: drag the app from Applications to the Dock to keep it handy.
 
+### Android phone or iPhone
+There is also a **phone edition**, **NINDITO POS Mobile**, with the same features. It runs entirely inside the phone, with no computer needed, and your data stays on the phone. On the phone, open the project's **Releases** page on GitHub and pick the newest *NINDITO POS Mobile*:
+- **Android:** tap the **.apk** file, then **Open**. If asked, allow your browser to install apps, then tap **Install**.
+- **iPhone:** Apple only allows App Store apps on ordinary iPhones, so the **.ipa** file needs a sideloading tool (AltStore or Sideloadly) and your Apple ID. Ask someone technical to help with this once.
+
+The app tells you when a new version is out (**Settings › Updates**). On a phone, receipts are shared (WhatsApp, email, a printer app) instead of printed directly, and backups are saved with **Settings › Data › Save a backup off this phone**.
+
 ### Every day after that
 Click the **NINDITO POS** icon. If it's already running, the window just comes back. You can also type **http://localhost:4321** into any browser on this computer.
 

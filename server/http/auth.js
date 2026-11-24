@@ -139,6 +139,16 @@ export function ownerNewKey(req, res, { pin, password }) {
 }
 export const clearOwnerSessions = () => ownerSessions.clear();
 
+// The phone edition restarts its in-app engine when the app reloads; it hands live sign-ins across
+// that restart (kept in memory for the running app only, never written to storage that outlives it).
+export const exportSessions = () => ({ sessions: [...sessions], elevations: [...elevations], owners: [...ownerSessions] });
+export function importSessions(s) {
+  const now = Date.now();
+  for (const [k, v] of s?.sessions || []) if (v > now) sessions.set(k, v);
+  for (const [k, v] of s?.elevations || []) if (v > now) elevations.set(k, v);
+  for (const [k, v] of s?.owners || []) if (v?.exp > now) ownerSessions.set(k, v);
+}
+
 function grantElevation(res) {
   const token = randomToken(24);
   const mins = Math.max(1, Math.min(60, Number(getGroup('security').elevateMinutes) || 10));

@@ -44,12 +44,19 @@ const PAGES = {
   security: () => [securityCard(), integrityCard(), privacyCard()],
   extensions: () => [extensionsCard()],
   data: () => [migrationCard(), backupCard()],
-  updates: () => [updatesCard(), systemCard()],
+  updates: () => (globalThis.__POS_MOBILE__ ? [lazy((m) => m.mobileUpdatesCard())] : [updatesCard(), systemCard()]),
 };
 
 export function renderSettings(root, { sub = 'business' } = {}) {
   const s = getState().boot.settings;
   root.replaceChildren(h('div.settings', (PAGES[sub] || PAGES.business)(s)));
+}
+
+/** Phone-only pieces live in mobile.js (loaded only inside the mobile app). */
+function lazy(make) {
+  const slot = h('div');
+  import('../mobile.js').then((m) => slot.replaceWith(make(m))).catch(errorToast);
+  return slot;
 }
 
 function groupCard(group, title, ic, fields, values, after) {
@@ -263,7 +270,7 @@ function backupCard() {
       h('div', h('button.btn', { style: { marginTop: '22px' }, onclick: async () => {
         try { await put('/api/settings/backup', { values: { auto: auto.checked, everyHours: Number(every.value), keep: Number(keep.value) } }); toast('Saved', 'success'); } catch (e) { errorToast(e); }
       } }, 'Save'))),
-    h('h4', 'Copy off this computer'), usbBox(),
+    globalThis.__POS_MOBILE__ ? h('h4', 'Save off this phone') : h('h4', 'Copy off this computer'), globalThis.__POS_MOBILE__ ? lazy((m) => m.phoneBackupBox()) : usbBox(),
     h('h4', 'Backups on this PC'), list,
     h('h4', 'Restore from a file'), h('label.btn', icon('upload', 16), 'Choose backup file…', upload));
 }

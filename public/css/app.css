@@ -583,6 +583,7 @@ label.icon-btn input[type=file] { display: none; }
 .help-panel ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; } .help-panel p { margin: 0; font-size: 12px; }
 .nudge { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 12px; background: color-mix(in srgb, var(--warn, #b45309) 12%, var(--surface)); border: 1px solid color-mix(in srgb, var(--warn, #b45309) 35%, transparent); }
 .nudge span { flex: 1; }
+@media (max-width: 700px) { .nudge { flex-wrap: wrap; } .nudge span { flex-basis: calc(100% - 40px); } }
 .usb-box { display: grid; gap: 10px; } .usb-box select { min-width: 0; flex: 1; }
 
 /* ---------- touch mode: bigger targets for touch screens ---------- */

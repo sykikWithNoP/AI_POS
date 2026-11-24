@@ -17,7 +17,7 @@ export function client() {
   // All traffic goes through the egress gate: the key is pinned to api.anthropic.com and the SDK's
   // platform headers (OS, CPU architecture, runtime version) are stripped before anything leaves.
   const fetchVia = (url, init) => egressFetch(url, init, { purpose: 'ai' });
-  return { anthropic: new Anthropic({ apiKey: cfg.apiKey, maxRetries: 2, fetch: fetchVia }), cfg };
+  return { anthropic: new Anthropic({ apiKey: cfg.apiKey, maxRetries: 2, fetch: fetchVia, dangerouslyAllowBrowser: !!globalThis.__POS_MOBILE__ }), cfg };
 }
 
 export function mapError(e) {

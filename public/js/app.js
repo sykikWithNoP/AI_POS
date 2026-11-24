@@ -43,6 +43,7 @@ async function start() {
   checkIntegrity();
   window.addEventListener('hashchange', route);
   route();
+  if (globalThis.__POS_MOBILE__ && boot.ownerSignedIn) import('./mobile.js').then((m) => m.updateBanner());
   if (boot.welcome) {
     const next = await runWelcome(boot);
     await loadItems();

@@ -229,7 +229,8 @@ async function copyText(text) {
 function backupNudge() {
   const r = getState().boot.backupReminder;
   if (!r?.due) return null;
+  const dev = globalThis.__POS_MOBILE__ ? 'phone' : 'computer';
   return h('div.nudge', icon('download', 18),
-    h('span', r.days === null ? 'You have never copied a backup off this computer. ' : `Your last backup copy off this computer was ${r.days} days ago. `, 'If the computer breaks, that copy is how you get everything back.'),
-    h('a.btn.sm.primary', { href: '#/settings/data' }, 'Back up to USB'));
+    h('span', r.days === null ? `You have never saved a backup off this ${dev}. ` : `Your last backup copy off this ${dev} was ${r.days} days ago. `, `If the ${dev} breaks, that copy is how you get everything back.`),
+    h('a.btn.sm.primary', { href: '#/settings/data' }, globalThis.__POS_MOBILE__ ? 'Save a backup' : 'Back up to USB'));
 }

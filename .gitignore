@@ -36,3 +36,14 @@ node_modules/**/coverage/
 # installer build caches (Node.js downloads, staging)
 /packaging/.cache/
 /packaging/.stage/
+
+# mobile edition: dependencies and build output
+/mobile/node_modules/
+/mobile/www/
+/mobile/release/
+
+/mobile/android/app/src/main/assets/public/
+/mobile/android/app/src/main/assets/capacitor.config.json
+/mobile/android/app/src/main/assets/capacitor.plugins.json
+/mobile/android/app/src/main/res/xml/config.xml
+/mobile/ios/

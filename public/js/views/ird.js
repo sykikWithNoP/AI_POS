@@ -31,7 +31,7 @@ export async function renderIrd(box) {
       h('header.card-head', h('h3', icon('download', 18), 'Filing pack (attach to your IRD return)')),
       h('p.hint', 'One ZIP with: sales register (CSV + printable), VAT summary by month, credit notes, and a list of any bills IRD has not accepted yet.'),
       h('div.toolbar-actions', fy, month,
-        h('button.btn.primary', { onclick: () => { location.href = `/api/ird/filing-pack?fy=${encodeURIComponent(fy.value)}${month.value ? `&month=${month.value}` : ''}`; } }, icon('download', 16), 'Download filing pack'))),
+        h('button.btn.primary', { onclick: () => { const a = document.createElement('a'); a.href = `/api/ird/filing-pack?fy=${encodeURIComponent(fy.value)}${month.value ? `&month=${month.value}` : ''}`; document.body.append(a); a.click(); a.remove(); } }, icon('download', 16), 'Download filing pack'))),
     h('p.hint', 'Failed bills are retried automatically (after 1, 5, 15, 60 minutes, then every few hours). Bills imported from an old system are never sent.')));
 }
 

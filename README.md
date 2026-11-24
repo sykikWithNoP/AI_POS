@@ -89,7 +89,7 @@ eSewa · Khalti · Stripe · Fonepay/Bank QR · Card terminal · Payment notific
 ### Build your own features
 **Settings → Extensions** runs small JavaScript plugins, sandboxed (see below), with a documented `pos` API: discount rules, toolbar buttons, checkout checks, custom items, and reactions to sales and payments. You can also describe a feature in plain words and the AI Copilot drafts the extension (using your Anthropic key). The draft opens **disabled** so you can read it first.
 
-> **Not technical?** Download the installer for [Windows or Mac](installers/README.md) and read the [plain-language user guide](USER-GUIDE.md).
+> **Not technical?** Download the installer for [Windows or Mac](installers/README.md), or the [phone app](mobile/README.md) for Android and iPhone, and read the [plain-language user guide](USER-GUIDE.md).
 
 ## Navigation map
 

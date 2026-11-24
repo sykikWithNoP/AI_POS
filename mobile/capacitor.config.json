@@ -1,0 +1,10 @@
+{
+  "appId": "com.nindito.pos.mobile",
+  "appName": "NINDITO POS",
+  "webDir": "www",
+  "android": { "allowMixedContent": false, "captureInput": true },
+  "ios": { "contentInset": "never" },
+  "plugins": {
+    "CapacitorHttp": { "enabled": true }
+  }
+}
