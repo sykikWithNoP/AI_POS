@@ -22,7 +22,7 @@ export function phoneBackupBox() {
     age.replaceChildren(r.days === null ? 'No backup has been saved off this phone yet.' : `Last backup saved off this phone: ${r.days === 0 ? 'today' : `${r.days} day${r.days === 1 ? '' : 's'} ago`}.`, r.due ? h('b.warn-text', ' Time for a new one.') : '');
   };
   refresh().catch(() => {});
-  return h('div.usb-box',
+  return h('div.usb-box', keepBox(),
     h('p.hint', 'If this phone is lost or broken, a saved backup is how you get everything back. Save one to Google Drive, Files, or email it to yourself once a week. Saved connector keys are not included (for safety).'),
     age,
     h('button.btn.primary', { type: 'button', onclick: async () => {
@@ -34,4 +34,23 @@ export function phoneBackupBox() {
         toast('Choose where to keep the backup', 'info'); refresh();
       } catch (e) { errorToast(e); }
     } }, icon('download', 16), 'Save a backup off this phone'));
+}
+
+/** The encrypted copy in Documents/NINDITO POS that survives uninstalling the app. */
+function keepBox() {
+  const keep = globalThis.__POS_KEEP__;
+  const box = h('div.integrity');
+  const draw = () => {
+    const st = keep?.status() || {};
+    box.className = `integrity ${st.on && !st.lastError ? 'ok' : 'bad'}`;
+    box.replaceChildren(icon('shield', 18), h('div',
+      h('b', st.on ? 'Your data is kept safe outside the app' : 'Sign in as owner once to switch on the safe copy'),
+      h('p', st.on
+        ? `An encrypted copy is kept in ${st.folder} on this phone and updated after every change${st.lastAt ? ` (last: ${new Date(st.lastAt).toLocaleString()})` : ''}. It stays even if the app is uninstalled. After reinstalling, choose "Restore my data" and enter your Owner Key.`
+        : 'The copy is locked with your Owner Key, so the app needs it once (owner sign-in).'),
+      st.lastError ? h('p.danger-text', `Could not save the copy: ${st.lastError}`) : null,
+      st.on ? h('button.btn.sm', { type: 'button', onclick: async () => { await keep.saveNow(); draw(); toast('Safe copy updated', 'success'); } }, icon('refresh', 14), 'Update now') : null));
+  };
+  draw();
+  return box;
 }

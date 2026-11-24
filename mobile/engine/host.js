@@ -4,8 +4,10 @@
 // Only the services the owner switches on (payments, IRD, AI…) are contacted, through the same privacy gate.
 import { Buffer } from 'buffer';
 import initSqlJs from 'sql.js/dist/sql-wasm-browser.js';
-import { setSqlModule, kvGet, kvSet, persistNow, MAIN_DB } from './runtime.js';
-import { loadFs, peek } from './shims/fs.js';
+import { setSqlModule, kvGet, kvSet, persistNow, MAIN_DB, getMainDb } from './runtime.js';
+import { loadFs, peek, exportTree } from './shims/fs.js';
+import { initKeep, rememberOwnerKey, adoptRestored, keepStatus, writeCopy } from './keep.js';
+import { startChoice } from './start-choice.js';
 import fs from './shims/fs.js';
 import { createExchange } from './shims/express.js';
 
@@ -87,6 +89,7 @@ globalThis.fetch = async (input, init = {}) => {
   // Anything that changed data is saved to the phone before the screen gets its answer,
   // so closing or reloading the app right after a sale never loses it.
   if ((init.method || 'GET').toUpperCase() !== 'GET') await persistNow();
+  noteOwnerKey(new URL(url, location.href).pathname, init, x.res).catch(() => {});
   return toResponse(x.res);
 };
 
@@ -218,9 +221,27 @@ new MutationObserver((list) => {
 }).observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ['src'] });
 
 // ---------- boot ----------
+/** The Owner Key passes through here at setup, sign-in and "new key": lock the keep-safe copy with it. */
+async function noteOwnerKey(path, init, res) {
+  if (res.statusCode >= 300 || !/^\/api\/auth\/(setup|owner\/(login|setup|new-key))$/.test(path)) return;
+  let key = null;
+  try { key = JSON.parse(Buffer.concat(res.chunks.map((c) => Buffer.from(c))).toString()).ownerKey; } catch { /* no body */ }
+  if (!key && path.endsWith('/login')) { try { key = JSON.parse(String(init.body || '{}')).key; } catch { /* ignore */ } }
+  if (key) await rememberOwnerKey(key);
+}
+
 async function boot() {
   const SQL = await initSqlJs({ locateFile: () => 'sql-wasm.wasm' });
   setSqlModule(SQL);
+  // Fresh install: start a new shop, or restore the copy that survived uninstalling.
+  if (!(await kvGet('db'))) {
+    const restored = await startChoice();
+    if (restored) {
+      await kvSet('db', restored.db);
+      await kvSet('fs', { dirs: restored.dirs, files: restored.files });
+      await adoptRestored(restored.keep);
+    }
+  }
   await loadFs();
   fs.mkdirSync('/data', { recursive: true });
   // A restore chosen in Settings › Data is applied on the next start (like the computer edition).
@@ -235,6 +256,12 @@ async function boot() {
   void MAIN_DB;
   const engine = await import('./server-entry.js');
   app = engine.start();
+  await initKeep(() => {
+    const db = getMainDb();
+    const count = (sql) => { try { return db.raw.exec(sql)[0]?.values[0][0] ?? 0; } catch { return 0; } };
+    return { db: db.raw.export(), ...exportTree(), summary: { bills: count('SELECT COUNT(*) FROM sales'), items: count('SELECT COUNT(*) FROM items') } };
+  });
+  globalThis.__POS_KEEP__ = { status: keepStatus, saveNow: writeCopy };
   // Sign-ins survive a reload of the screens (not a full close of the app).
   try {
     const saved = JSON.parse(sessionStorage.getItem('pos.engine.sessions') || 'null');

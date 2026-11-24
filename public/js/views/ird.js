@@ -1,5 +1,6 @@
 // IRD made easy: setup wizard, readiness checklist, sync everything, filing pack.
 import { h, icon, toast, errorToast, field, badge, modal, confirmDialog } from '../ui.js';
+import { thisDevice } from '../device.js';
 import { get, post } from '../api.js';
 import { getState } from '../store.js';
 
@@ -51,7 +52,7 @@ function wizard(st, done) {
   const body = h('div');
   const draw = () => body.replaceChildren(h('ol.steps', ['Business', 'IRD login', 'Go live'].map((s, i) => h(`li${i + 1 === step ? '.on' : i + 1 < step ? '.done' : ''}`, s))),
     step === 1 ? h('div.form-grid', h('p.hint', 'Your bills will show this PAN and IRD receives it as the seller PAN.'), field('PAN / VAT number', pan), field('Business name (as registered)', name), field('Address', address))
-      : step === 2 ? h('div.form-grid', h('p.hint', 'The CBMS username and password IRD issued for your PAN (from the IRD taxpayer portal). The password is encrypted on this PC and is only ever sent to the IRD server.'), field('CBMS username', user), field('CBMS password', pass))
+      : step === 2 ? h('div.form-grid', h('p.hint', `The CBMS username and password IRD issued for your PAN (from the IRD taxpayer portal). The password is encrypted on ${thisDevice()} and is only ever sent to the IRD server.`), field('CBMS username', user), field('CBMS password', pass))
         : h('div.form-grid', h('p', 'Practice mode builds every IRD message but sends nothing, so you can check bills first.'),
           h('label.toggle', live, h('span.track'), h('span', h('b', 'Go live'), ' — send every new bill to IRD automatically')),
           h('p.hint', 'IRD has no test login: in live mode real bills are reported. Bills already issued in practice mode can be sent with “Sync everything now”.')));

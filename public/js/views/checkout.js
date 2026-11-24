@@ -1,6 +1,7 @@
 // Checkout: one modal that turns a cart into a sale, collects one or more payments
 // (cash / card / QR / eSewa / Khalti / Stripe) and waits for verification events.
 import { h, icon, money, toMinor, toMajor, toast, errorToast, modal, chime } from '../ui.js';
+import { thisDevice } from '../device.js';
 import { showPaid } from '../display-link.js';
 import { dispatch, getState } from '../store.js';
 import { get, post } from '../api.js';
@@ -142,7 +143,7 @@ export function openCheckout(cart, totals, { sale: existing } = {}) {
     // Online providers
     return h('div', amountField(),
       h('p.hint', {
-        esewa: 'Opens eSewa in a new window on this PC. The POS checks eSewa for the result automatically.',
+        esewa: `Opens eSewa in a new window on ${thisDevice()}. The POS checks eSewa for the result automatically.`,
         khalti: 'Creates a Khalti payment link. Show the QR to the customer or open it here. Verified automatically.',
         stripe: 'Creates a Stripe Checkout link. Show the QR or open it here. Verified automatically.',
       }[mt.id]),

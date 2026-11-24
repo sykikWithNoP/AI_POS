@@ -1,5 +1,6 @@
 // Connectors: bring-your-own-key integrations. Secrets are write-only from the browser's view.
 import { h, icon, toast, errorToast, modal, field, badge, confirmDialog, fmtDate } from '../ui.js';
+import { thisDevice } from '../device.js';
 import { get, put, post, del } from '../api.js';
 import { getState, dispatch } from '../store.js';
 import { imageInput } from '../ui.js';
@@ -27,7 +28,7 @@ const SPECS = [
   { group: 'google', steps: ["In Google Cloud Console create an OAuth client (Web application) — the redirect address is shown below.", "Paste the client ID and secret here and press Save.", "Press Connect Google Calendar and allow access."], title: 'Google Calendar', icon: 'calendar', section: 'apps', desc: 'Use your own OAuth client. See upcoming events on Overview, post day-close summaries, optionally log every sale.',
     fields: [{ name: 'clientId', label: 'OAuth client ID' }, { name: 'clientSecret', type: 'secret', label: 'OAuth client secret' }, { name: 'calendarId', label: 'Calendar ID', hint: '"primary" or a calendar\'s ID' },
       { name: 'logSales', type: 'toggle', label: 'Add every paid sale as an event' }], extra: googleExtra },
-  { group: 'ai', steps: ["Create an API key at console.anthropic.com (needs a payment method there).", "Paste it here, press Save, then Test.", "Open the Copilot with the ✨ button at the top."], title: 'AI Copilot', icon: 'sparkles', section: 'apps', desc: 'Bring your own Anthropic API key for the copilot and the AI feature builder. The key stays on this PC.',
+  { group: 'ai', steps: ["Create an API key at console.anthropic.com (needs a payment method there).", "Paste it here, press Save, then Test.", "Open the Copilot with the ✨ button at the top."], title: 'AI Copilot', icon: 'sparkles', section: 'apps', desc: `Bring your own Anthropic API key for the copilot and the AI feature builder. The key stays on ${thisDevice()}.`,
     fields: [{ name: 'apiKey', type: 'secret', label: 'Anthropic API key' }, { name: 'model', label: 'Model', hint: 'Leave as it is unless you need a different model' },
       { name: 'effort', type: 'select', label: 'Effort', options: ['low', 'medium', 'high', 'xhigh', 'max'], hint: 'Higher = more thorough, slower, more tokens' }], test: true },
   { group: 'printer', steps: ["Choose how the printer is connected.", "Network printer: type its IP address (hold the feed button while switching it on to print it). USB: type the printer's name as it appears on this computer.", "Press Save, then Test print."], title: 'Receipt printer', icon: 'printer', section: 'devices', desc: 'Print receipts automatically and open the cash drawer on cash sales.',
@@ -47,8 +48,8 @@ const SPECS = [
 const INTRO = {
   payments: 'Payment methods offered at checkout. Online payments are verified automatically; nothing is marked paid on trust.',
   tax: 'Report bills to IRD (CBMS). The step-by-step wizard and filing pack live under Overview → IRD.',
-  apps: 'Your own Google Calendar, AI key and phone alerts. Keys stay on this PC, encrypted, and are only sent to their own service.',
-  devices: 'Receipt printers, cash drawers and barcode scanners connected to this PC or your local network.',
+  apps: `Your own Google Calendar, AI key and phone alerts. Keys stay on ${thisDevice()}, encrypted, and are only sent to their own service.`,
+  devices: `Receipt printers, cash drawers and barcode scanners connected to ${thisDevice()} or your local network.`,
   developer: 'Let your own scripts and websites talk to the POS: scoped API keys in, signed webhooks out.',
 };
 

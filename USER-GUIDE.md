@@ -64,7 +64,10 @@ Tip: drag the app from Applications to the Dock to keep it handy.
 There is also a **phone edition**, **NINDITO POS Mobile**, with the same features. It runs entirely inside the phone, with no computer needed, and your data stays on the phone. It is available for **Android** now; iPhone comes later.
 - On the phone, open the **`installers`** folder of the project on GitHub, tap **`NINDITOPOS-Mobile-…-Android.apk`**, then **Download**.
 - Open the downloaded file. If asked, allow your browser to install apps, then tap **Install**.
-- To update later, install a newer `.apk` the same way. Your data stays. On a phone, receipts are shared (WhatsApp, email, a printer app) instead of printed directly, and backups are saved with **Settings › Data › Save a backup off this phone**.
+- To update later, install a newer `.apk` the same way. Your data stays.
+- **Your data survives uninstalling.** An encrypted copy is kept in the phone's **Documents › NINDITO POS** folder.
+  - After reinstalling, choose **Restore my data** on the first screen, pick that file if asked, and enter your **Owner Key**.
+  - Without the Owner Key the copy cannot be opened, so keep it safe. On a phone, receipts are shared (WhatsApp, email, a printer app) instead of printed directly, and backups are saved with **Settings › Data › Save a backup off this phone**.
 
 ### Every day after that
 Click the **NINDITO POS** icon. If it's already running, the window just comes back. You can also type **http://localhost:4321** into any browser on this computer.

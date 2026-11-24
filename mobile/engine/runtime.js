@@ -10,6 +10,7 @@ export const MAIN_DB = () => globalThis.process?.env?.DB_FILE || '/data/pos.db';
 export const SQL = () => sqlModule;
 export const setSqlModule = (m) => { sqlModule = m; };
 export const setMainDb = (db) => { mainDb = db; };
+export const getMainDb = () => mainDb;
 export const onPersist = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
 
 // ---------- IndexedDB key/value store ----------

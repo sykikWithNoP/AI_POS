@@ -134,6 +134,12 @@ onPersist(async () => {
   await kvSet('fs', { dirs: [...dirs], files: Object.fromEntries(files) });
 });
 
+/** For the keep-safe copy: every file except backups (the copy is itself the backup). */
+export const exportTree = () => ({
+  dirs: [...dirs],
+  files: Object.fromEntries([...files].filter(([p]) => !p.startsWith('/data/backups/') && !p.startsWith('/app/'))),
+});
+
 /** For the host: read a file as bytes without Buffer (e.g. to share a backup). */
 export const peek = (p) => files.get(norm(p))?.data || null;
 

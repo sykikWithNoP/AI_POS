@@ -12,7 +12,7 @@ const PAGES = {
   business: (s) => [
     groupCard('business', 'Business profile', 'receipt', [
       ['name', 'Shop name'], ['address', 'Address'], ['phone', 'Phone'], ['email', 'Email'], ['pan', 'PAN / VAT number', 'Printed on tax invoices'],
-      ['logoUrl', 'Logo (stored on this PC)', null, 'image'], ['currency', 'Currency code'], ['currencySymbol', 'Currency symbol'], ['locale', 'Number locale', 'e.g. en-IN, ne-NP, en-US'],
+      ['logoUrl', `Logo (stored on ${thisDevice()})`, null, 'image'], ['currency', 'Currency code'], ['currencySymbol', 'Currency symbol'], ['locale', 'Number locale', 'e.g. en-IN, ne-NP, en-US'],
       ['invoicePrefix', 'Invoice prefix'], ['receiptFooter', 'Receipt footer'],
       ['calendar', 'Month view calendar', null, ['AD', 'BS']],
       ['publicUrl', 'Public URL (optional)', 'Only if you expose the POS via a tunnel/LAN — used for bill links, QR codes and webhooks'],
@@ -272,7 +272,7 @@ function backupCard() {
         try { await put('/api/settings/backup', { values: { auto: auto.checked, everyHours: Number(every.value), keep: Number(keep.value) } }); toast('Saved', 'success'); } catch (e) { errorToast(e); }
       } }, 'Save'))),
     globalThis.__POS_MOBILE__ ? h('h4', 'Save off this phone') : h('h4', 'Copy off this computer'), globalThis.__POS_MOBILE__ ? lazy((m) => m.phoneBackupBox()) : usbBox(),
-    h('h4', 'Backups on this PC'), list,
+    h('h4', `Backups on ${thisDevice()}`), list,
     h('h4', 'Restore from a file'), h('label.btn', icon('upload', 16), 'Choose backup file…', upload));
 }
 
@@ -606,7 +606,7 @@ function themeBuilder(existing, done, choose) {
     title: existing ? `Edit theme · ${existing.name}` : 'Create a theme from your picture', wide: true,
     body: h('div.form-grid',
       big,
-      h('div.form-grid.two', field('Picture', file, 'JPEG/PNG/WebP. Resized on this PC; location data is removed.'), field('Theme name', name)),
+      h('div.form-grid.two', field('Picture', file, `JPEG/PNG/WebP. Resized on ${thisDevice()}; location data is removed.`), field('Theme name', name)),
       h('div.form-grid.two', field('Light or dark', modeSel), field('Accent colour', accentIn, 'Pick one to rebuild the palette around it')),
       h('div.form-grid.two', h('label.toggle', useBg, h('span.track'), h('span', 'Show the picture as background')), field('Picture strength', slider)),
       warn,
@@ -656,7 +656,7 @@ function privacyCard() {
   });
   load();
   return h('section.card',
-    h('header.card-head', h('h3', icon('shield', 18), 'Privacy — what leaves this PC'), h('button.btn.sm', { onclick: load }, icon('refresh', 14), 'Refresh')),
+    h('header.card-head', h('h3', icon('shield', 18), `Privacy — what leaves ${thisDevice()}`), h('button.btn.sm', { onclick: load }, icon('refresh', 14), 'Refresh')),
     h('p.hint', 'The server only connects to services you switched on, over HTTPS, without revealing anything about this computer (no OS, device or software details, no referrer). Each saved key can only be sent to its own provider; a key headed anywhere else — or a POS API key leaving at all — is blocked and logged. The screen never loads anything from other websites.'),
     h('label.toggle', off, h('span.track'), h('span', h('b', 'Offline mode'), ' — block every outbound connection (cash/card/QR selling keeps working)')),
     h('h4', 'Allowed destinations and what is sent'), allowed,

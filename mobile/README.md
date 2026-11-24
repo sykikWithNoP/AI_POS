@@ -26,7 +26,18 @@ The phone edition of NINDITO POS, for **Android** (iPhone later). It is a separa
 | Start with computer, customer display window, Google Calendar sign-in | Computer edition only. |
 | Online payments, IRD, Telegram, AI | Work the same, through the same privacy gate (key pinning, offline mode). |
 
-Everything stays inside the app's private storage. Uninstalling the app deletes its data, so save a backup first.
+## Your data survives uninstalling
+
+Android deletes an app's own storage when the app is uninstalled. So NINDITO POS also keeps an **encrypted copy of all your data in the phone's `Documents/NINDITO POS` folder**. That copy stays on the phone after an uninstall and is updated after every change.
+
+- **Encrypted with your Owner Key** (AES-256-GCM, key locked with scrypt). Other apps, or someone who finds the file, can't read it. The copy switches on the first time the Owner Key is typed (owner setup or sign-in).
+- **Reinstalling:** on first start, the app asks *Set up a new shop* or *Restore my data*.
+  - On older Android versions it finds the copy by itself.
+  - On Android 11 and newer, tap **Restore my data from a file…** and pick the file in *Documents › NINDITO POS*.
+  - Then enter your Owner Key.
+- **Status:** Settings › Data shows whether the safe copy is on and when it was last saved.
+- **Google's automatic cloud backup of app data is turned off**, so your business data never goes to Google unless you send it yourself.
+- **Deleting the copy:** delete the `Documents/NINDITO POS` folder in your Files app.
 
 ## For maintainers
 
