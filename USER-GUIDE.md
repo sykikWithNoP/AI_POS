@@ -23,33 +23,49 @@ With it you can:
 
 ## 2. What you need
 
-- A computer (Windows, Mac or Linux) that stays at the counter
-- A web browser: **Chrome** or **Edge** work best
-- One free program called **Node.js**. The till needs it to run, and you install it once.
+- A computer that stays at the counter: **Windows 10/11** or a **Mac** (macOS 11 or newer)
+- Nothing else. The installer includes everything the till needs.
 
-Optional: a receipt printer, a barcode scanner, a cash drawer.
+Optional: a receipt printer, a barcode scanner, a cash drawer, a second screen facing the customer.
 
 ---
 
 ## 3. Installing (one time)
 
+Download the installer for your computer from the **`installers`** folder of the project on GitHub (click the file, then the **Download** button):
+
+| Your computer | Download |
+|---|---|
+| Windows | `FreeAIPOS-…-Windows-Setup.exe` |
+| Mac with an Apple chip (M1, M2, M3, M4…) | `FreeAIPOS-…-macOS-AppleSilicon.dmg` |
+| Older Mac with an Intel processor | `FreeAIPOS-…-macOS-Intel.dmg` |
+
+> **Which Mac do I have?** Click the  Apple menu › **About This Mac**. If it says **Chip: Apple M…**, take *AppleSilicon*. If it says **Processor: … Intel**, take *Intel*.
+
 ### Windows
-1. Go to **nodejs.org** and click the big **LTS** download button. Open the file and click *Next* until it finishes.
-2. Open the Free AI POS folder you downloaded.
-3. Double-click **`install.bat`**. A black window checks everything. When it says it's done, close it.
-4. Double-click **`start.bat`**. Your browser opens the till.
+1. Double-click the **Setup** file you downloaded.
+2. If a blue box says **"Windows protected your PC"**, click **More info**, then **Run anyway**. (This appears because the installer is not from a big software company.)
+3. Click **Next**, **I Agree**, then **Install**. Tick **Start when Windows starts** if you want the till ready every morning.
+4. Click **Finish**. The till opens in its own window.
+
+From now on, open it with the **Free AI POS** icon on your desktop or in the Start menu.
 
 ### Mac
-1. Go to **nodejs.org**, download the **LTS** version, open it and follow the steps.
-2. Open the Free AI POS folder. Double-click **`start.sh`**. If the Mac asks, choose *Open*.
-   (If double-clicking doesn't work, ask someone to run `./install.sh` and then `./start.sh` in Terminal once.)
+1. Double-click the **.dmg** file you downloaded. A window opens.
+2. Drag **Free AI POS** onto the **Applications** folder in that window.
+3. Open your **Applications** folder and double-click **Free AI POS**.
+4. The first time, the Mac may say it **cannot verify the developer**. Do this **once**:
+   - **macOS 15 or newer:** open **System Settings › Privacy & Security**, scroll down, click **Open Anyway** next to Free AI POS, and confirm.
+   - **Older macOS:** right-click (or Control-click) the app, choose **Open**, then click **Open**.
+
+Tip: drag the app from Applications to the Dock to keep it handy.
 
 ### Every day after that
-Double-click **`start.bat`** (Windows) or **`start.sh`** (Mac). If the browser doesn't open by itself, type this address into it:
+Click the **Free AI POS** icon. If it's already running, the window just comes back. You can also type **http://localhost:4321** into any browser on this computer.
 
-**http://localhost:4321**
+> **No window appeared?** Open **http://localhost:4321** in Chrome, Edge or Safari.
 
-> **Tip:** Bookmark that address, or drag it to your desktop.
+> **Linux, or running from the source code?** See `INSTALL.md`. That route needs Node.js.
 
 ---
 
@@ -64,6 +80,8 @@ The till asks you to create three things. **Write them down and keep them safe.*
 | **Owner Key** (looks like `OK-XXXXX-XXXXX-…`) | A third lock for the owner pages, and your **rescue key** if you forget the PIN or password | Owner only |
 
 > ⚠️ **The Owner Key is shown only once.** Print it or save the key file on a USB stick. Keep it away from the shop computer.
+
+Then a short **welcome setup** asks five things: your shop's name, what kind of business it is, whether you charge VAT, how you want to add products (examples, type a few, or import a spreadsheet), and how customers pay. It takes about two minutes, and you can change every answer later in **Settings**. Afterwards, three numbered bubbles show you how to make a sale.
 
 ---
 
@@ -80,6 +98,8 @@ On the left (or along the bottom on a phone) there are **four buttons**:
 
 Each page has **tabs along the top** for its sections. The title bar always shows where you are, for example **Settings › Security**.
 
+**Stuck? Press the ? button at the top (or F1).** It explains the page you are on in a few steps and links to this guide.
+
 Pages marked *Owner* ask for the owner username, password and Owner Key. They lock themselves again after 30 minutes without use, or when you click **Owner · sign out** at the top.
 
 ---
@@ -87,7 +107,7 @@ Pages marked *Owner* ask for the owner username, password and Owner Key. They lo
 ## 6. A normal day
 
 ### Opening
-1. Start the till (double-click `start.bat` / `start.sh`).
+1. Open the till with the **Free AI POS** icon (or let it start with the computer).
 2. On **POS › Sell**, click **Open shift** at the top right. Count the cash in the drawer, type the amount, and click **Open shift**.
 
 ### Selling
@@ -100,7 +120,13 @@ Pages marked *Owner* ask for the owner username, password and Owner Key. They lo
 > **Online payments (eSewa, Khalti, Stripe)** are only marked paid once the payment company confirms them, so nobody can fake a payment.
 
 ### Serving several customers at once
-Click **+ New** above the bill to start another bill. Switch between them using the **Bill 1, Bill 2…** tabs. This is handy for tables, or when someone runs back for one more item.
+Click **+ New** above the bill to start another bill. Switch between them using the **Bill 1, Bill 2…** tabs. This is handy for tables, or when someone runs back for one more item. Open bills are kept even if the computer restarts.
+
+### A screen for the customer
+If you have a second screen facing the customer, click **Customer screen** (bottom of the Sell page). Drag the new window onto that screen and click **Full screen**. It shows the items and total as you ring them up, then "Thank you" and the change after payment.
+
+### Touch screens
+Turn on **Settings › Appearance › Touch mode** for bigger buttons.
 
 ### Pay later
 If it's turned on (**Settings › Checkout**), choose **Pay later** when you charge. The bill is issued now with a due date. When the customer comes back, go to **Overview › Bills**, set the filter to **Pay later (due)**, open their bill, and click **Collect payment**.
@@ -147,7 +173,7 @@ Nothing is ever deleted. Every change is recorded, so your books always add up.
 
 ## 10. Connecting things (Connectors)
 
-Each connector is a card. Fill it in, click **Save**, then click **Test** if the card has one. Passwords and keys you save are **hidden forever**. Nobody can read them back, not even you. To change one, type a new one.
+Each connector is a card with numbered **How to set it up** steps. Fill it in, click **Save**, then click **Test** if the card has one. Once a real payment has gone through, the card shows a green **✓ Working** tick. Passwords and keys you save are **hidden forever**. Nobody can read them back, not even you. To change one, type a new one.
 
 | Want to… | Go to |
 |---|---|
@@ -166,7 +192,8 @@ Each connector is a card. Fill it in, click **Save**, then click **Test** if the
 ## 11. Keeping your data safe
 
 - The till makes a **backup every day** by itself and keeps the last 14.
-- **Once a week, copy a backup to a USB stick.** Go to **Settings › Data**, click **Download** next to the newest backup, and save it to the stick. If the computer dies, this is how you get everything back.
+- **Once a week, copy a backup to a USB stick.** Plug in the stick, go to **Settings › Data**, choose it under **Copy off this computer** and click **Back up to USB / folder**. If the computer dies, this is how you get everything back. The Dashboard reminds you when it's time.
+- Have a disk that is always plugged in, or a OneDrive / Google Drive folder? Tick **Also copy every automatic backup here** and it happens by itself.
 - **To restore**: **Settings › Data › Choose backup file…** The till checks the file first and saves your current data before replacing it.
 
 ---
@@ -178,6 +205,10 @@ New versions come as a single **`.posupdate`** file. Go to **Settings › Update
 - Your data is backed up first.
 - If the new version doesn't start, the till goes back to the old one by itself.
 - Only update files signed by you (the owner) are accepted. Fake updates are refused.
+- Optional: under **Check for updates automatically**, give the address where you publish your updates. The till checks it once a day, downloads and checks a new version, and installs it only when you click **Install & restart**. It's off unless you turn it on.
+
+### Starting, restarting and shutting down
+In **Settings › Updates › This computer** you can turn **Start the POS when this computer starts** on or off, **Restart** the till, or **Shut it down**. Open bills are kept either way.
 
 ---
 
@@ -188,6 +219,7 @@ New versions come as a single **`.posupdate`** file. Go to **Settings › Update
 | **F2** | Jump to product search |
 | **F3** | Jump to customer search |
 | **F9** | Charge |
+| **F1** | Help for this page |
 | **Alt + 1 / 2 / 3 / 4** | POS / Overview / Connectors / Settings |
 | **Alt + [** and **Alt + ]** | Previous / next tab on the page |
 | **Esc** | Close a pop-up |
@@ -198,10 +230,12 @@ New versions come as a single **`.posupdate`** file. Go to **Settings › Update
 
 | Problem | What to do |
 |---|---|
-| **The page won't open** | Make sure you started the till (`start.bat` / `start.sh`) and its window is still open. Then go to **http://localhost:4321** |
+| **The page won't open** | Click the **Free AI POS** icon again and wait a few seconds. Then go to **http://localhost:4321** |
 | **Forgot the till PIN** | On the PIN screen, click **Forgot the PIN? Use the Owner Key** |
 | **Forgot the owner password** | On the owner sign-in, click **Forgot password?** and use your Owner Key |
-| **Lost the password *and* the Owner Key** | Someone with access to this computer runs `npm run reset-owner` in the Free AI POS folder. You then create a new owner account. Your sales and products are kept, but you need the till PIN to do this |
+| **Lost the password *and* the Owner Key** | **Windows:** press **Windows key + R**, paste `"%LOCALAPPDATA%\Programs\Free AI POS\Free AI POS.exe" --reset-owner` and press Enter. **Mac:** open Terminal, paste `"/Applications/Free AI POS.app/Contents/MacOS/Free AI POS" --reset-owner` and press Enter. Then open the till and create a new owner account. Your sales and products are kept, but you need the till PIN to do this |
+| **"Another program is using port 4321"** | Restart the computer, then open Free AI POS again |
+| **Where is my data?** | Windows: `%LOCALAPPDATA%\FreeAIPOS\data` · Mac: `~/Library/Application Support/Free AI POS`. Uninstalling asks before deleting it |
 | **Red "Tamper warning" bar** | Something in the records was changed outside the till. Click **Details**, and don't ignore it. Restore a backup if needed |
 | **Receipt doesn't print** | **Connectors › Devices › Receipt printer**: check the connection type, then click **Test print** |
 | **"Owner sign-in required"** | The owner pages lock after 30 minutes. Sign in again |

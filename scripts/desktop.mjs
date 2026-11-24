@@ -4,7 +4,7 @@
 // The window is the browser already on this computer (Edge/Chrome in "app" mode: no address bar or tabs),
 // falling back to the default browser. `--background` starts the POS without opening a window
 // (used by "Start when this computer starts").
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
@@ -86,6 +86,16 @@ function fail(msg) {
   else if (process.platform === 'darwin') spawn('osascript', ['-e', `display alert "Free AI POS" message ${JSON.stringify(msg)}`], { detached: true, stdio: 'ignore' }).unref();
   else console.error(msg);
   process.exitCode = 1;
+}
+
+// Recovery: forgot the owner password AND lost the Owner Key. Keeps all data and the PIN.
+if (process.argv.includes('--reset-owner')) {
+  const entry = path.join(root, bundled ? 'server.mjs' : 'server/index.js');
+  const r = spawnSync(process.execPath, ['--no-warnings=ExperimentalWarning', entry, '--reset-owner'], { env: { ...process.env, DATA_DIR: DATA }, encoding: 'utf8' });
+  const msg = (r.stdout || r.stderr || '').trim() || 'Done.';
+  if (process.platform === 'win32') spawnSync('powershell', ['-NoProfile', '-Command', `Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('${msg.replace(/'/g, "''")}', 'Free AI POS') | Out-Null`], { windowsHide: true });
+  else console.log(msg);
+  process.exit(r.status ?? 0);
 }
 
 const state = await probe();

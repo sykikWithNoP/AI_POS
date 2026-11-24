@@ -2,6 +2,12 @@
 
 > Personal use only. Commercial use without the copyright holder's written approval is forbidden — see [LICENSE](LICENSE).
 
+## Easiest: the installers
+
+Windows and Mac users don't need anything on this page: download the installer from [`installers/`](installers/README.md) and double-click it. Node.js is included.
+
+The rest of this page is for Linux, or for running from the source code.
+
 ## What you need
 
 | Requirement | Needed? | Notes |
