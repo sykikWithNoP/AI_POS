@@ -26,6 +26,7 @@ export async function api(path, opts = {}) {
   if (!res.ok) {
     const err = new ApiError(res.status, data?.error, data?.message || `Request failed (${res.status})`);
     if (res.status === 401 && data?.error === 'unauthenticated') window.dispatchEvent(new CustomEvent('pos:locked'));
+    if (res.status === 423 && data?.error === 'sealed') window.dispatchEvent(new CustomEvent('pos:setup'));
     if (res.status === 428 && data?.error === 'setup_required') window.dispatchEvent(new CustomEvent('pos:setup'));
     if (res.status === 403 && (data?.error === 'owner_required' || data?.error === 'owner_setup_required')) window.dispatchEvent(new CustomEvent('pos:owner'));
     throw err;

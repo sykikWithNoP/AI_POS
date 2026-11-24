@@ -101,6 +101,7 @@ function securityCard() {
           } }] });
       } }, icon('key', 16), 'Replace Owner Key'),
       h('button.btn', { onclick: () => ownerSignOut() }, icon('lock', 16), 'Sign out of owner area')),
+    sealControls(),
     h('h4', 'Change till PIN'),
     h('div.form-grid.two', field('Current PIN', current), field('New PIN', pin)),
     h('footer.conn-actions', notifyBtn,
@@ -612,4 +613,26 @@ function migrationCard() {
     h('p.hint', 'Bring items, customers, opening stock or past sales from your old POS or spreadsheet (CSV, TSV or JSON export). Past sales are kept as history: they appear in reports but are never sent to IRD again.'),
     h('div.form-grid.two', field('What are you importing?', kindSel), h('label.btn', { style: { alignSelf: 'end' } }, icon('upload', 16), 'Choose export file…', file)),
     stage);
+}
+
+/** Optional: seal the master key so the POS needs the PIN after every start. */
+function sealControls() {
+  const box = h('div');
+  const draw = async () => {
+    const st = await get('/api/security/seal');
+    const pin = h('input.input', { type: 'password', inputMode: 'numeric', placeholder: 'PIN' });
+    const key = h('input.input.mono', { type: 'password', autocomplete: 'off', placeholder: 'Owner Key (recovery if the PIN is forgotten)' });
+    box.replaceChildren(h('h4', 'Require the PIN at every start'),
+      h('p.hint', st.sealed
+        ? `On. The key that protects your saved keys and audit log is sealed with the PIN${st.ownerRecovery ? ' and the Owner Key' : ''}; copying the data folder alone reveals nothing. Backups need the PIN or Owner Key to be useful.`
+        : 'Off. Turn on to seal the key that protects your saved keys and audit log. After every restart the POS stays locked until someone enters the PIN (or the Owner Key).'),
+      st.sealed
+        ? h('div.row-actions', pin, h('button.btn', { onclick: async () => { try { await post('/api/security/unseal-off', { pin: pin.value }, { noPinRetry: true }); toast('PIN at start turned off', 'success'); draw(); } catch (e) { errorToast(e); } } }, 'Turn off'))
+        : h('div.form-grid.two', pin, key, h('button.btn.primary', { onclick: async () => {
+          if (!(await confirmDialog('Seal the keys? From now on the POS asks for the PIN after every restart. Keep your Owner Key safe — it is the only other way in.', { okLabel: 'Seal keys' }))) return;
+          try { await post('/api/security/seal', { pin: pin.value, ownerKey: key.value }, { noPinRetry: true }); toast('Keys sealed', 'success'); draw(); } catch (e) { errorToast(e); }
+        } }, icon('lock', 16), 'Turn on')));
+  };
+  draw().catch(errorToast);
+  return box;
 }

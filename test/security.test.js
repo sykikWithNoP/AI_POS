@@ -252,6 +252,35 @@ test('owner recovery: reset password with key + PIN, replace key with password +
   assert.notEqual(nk.json.ownerKey, OWNER_KEY);
   assert.equal((await req('POST', '/api/auth/owner/login', { username: 'boss', password: 'Brand-new pass 77', key: OWNER_KEY })).status, 401); // old key dead
   assert.equal((await req('POST', '/api/auth/owner/login', { username: 'boss', password: 'Brand-new pass 77', key: nk.json.ownerKey })).status, 200);
+  globalThis.__lastOwnerKey = nk.json.ownerKey;
   assert.equal((await req('POST', '/api/auth/setup', { pin: '1111', username: 'x', password: 'whatever-123456' })).status, 409);
   _resetAttempts();
+});
+
+test('sealed master key: locked after restart until PIN or Owner Key; PIN change keeps it openable', async () => {
+  const lib = await import('../server/lib.js');
+  const { _resetAttempts } = await import('../server/http/auth.js');
+  _resetAttempts();
+  const login = await req('POST', '/api/auth/owner/login', { username: 'boss', password: 'Brand-new pass 77', key: undefined });
+  assert.equal(login.status, 401); // sanity: key is required
+  // Find the current owner key from the previous test by issuing a new one (needs password + PIN).
+  const own = await req('POST', '/api/auth/owner/login', { username: 'boss', password: 'Brand-new pass 77', key: globalThis.__lastOwnerKey || 'x' });
+  assert.equal(own.status, 200, 'owner sign-in with the key issued by the recovery test');
+  const OWN = jar(own.cookies);
+  const sealRes = await req('POST', '/api/security/seal', { pin: '4321', ownerKey: globalThis.__lastOwnerKey }, OWN);
+  assert.equal(sealRes.status, 200);
+  assert.equal(sealRes.json.sealed, true);
+  assert.equal(fs.existsSync(path.join(dir, 'secret.key')), false); // plain key removed
+  lib._forgetKeyForTests(); // simulate a restart
+  assert.equal((await req('GET', '/api/auth/state')).json.sealed, true);
+  assert.equal((await req('GET', '/api/bootstrap', null, OWN)).status, 423);
+  assert.equal((await req('POST', '/api/auth/unseal', { pin: '0000' })).status, 401);
+  assert.equal((await req('POST', '/api/auth/unseal', { pin: '4321' })).status, 200);
+  assert.equal((await req('GET', '/api/bootstrap')).status, 200);
+  assert.equal(ledger.verify().ok, false); // (an earlier test tampered on purpose) — verification works after unlock
+  lib._forgetKeyForTests();
+  assert.equal((await req('POST', '/api/auth/unseal', { ownerKey: globalThis.__lastOwnerKey })).status, 200); // recovery path
+  const off = await req('POST', '/api/security/unseal-off', { pin: '4321' }, OWN);
+  assert.equal(off.json.sealed, false);
+  assert.equal(fs.existsSync(path.join(dir, 'secret.key')), true);
 });

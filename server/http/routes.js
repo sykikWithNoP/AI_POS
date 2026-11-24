@@ -5,7 +5,9 @@ import os from 'node:os';
 import path from 'node:path';
 import QRCode from 'qrcode';
 import { db } from '../db.js';
-import { HttpError, badRequest, safeEqual, hmacHex, randomToken } from '../lib.js';
+import { HttpError, badRequest, safeEqual, hmacHex, randomToken, verifyPin, unseal, seal, unsealPermanently, sealInfo } from '../lib.js';
+import { checkSecret, normalizeKey } from '../security/owner.js';
+import { notify as notifyBus } from '../bus.js';
 import { requireAuth, login, logout, authState, setup, elevate, changePin, dropElevation, csrfOnly, isOwner, ownerLogin, ownerLogout, ownerSetup, ownerResetPassword, ownerNewKey } from './auth.js';
 import { append as appendLedger, verify as verifyLedger, recent as ledgerRecent } from '../security/ledger.js';
 import { toCsv, parseCsv } from './csv.js';
@@ -69,6 +71,30 @@ export function apiRouter() {
   r.post('/auth/login', local, (req, res) => res.json(login(req, res, req.body?.pin)));
   r.post('/auth/logout', (req, res) => { logout(req, res); res.json({ ok: true }); });
   r.post('/auth/setup', local, (req, res) => res.json(setup(req, res, req.body || {})));
+  // Sealed key: unlock after a start with the PIN (or the Owner Key as recovery).
+  r.post('/auth/unseal', local, (req, res) => {
+    const { pin, ownerKey } = req.body || {};
+    unseal(ownerKey ? ownerKey : pin, ownerKey ? 'owner' : 'pin');
+    const v = verifyLedger();
+    if (!v.ok) notifyBus({ type: 'security.tamper', level: 'error', title: 'Tampering detected in records', body: v.problems[0]?.reason || '' });
+    audit('security.unsealed', ownerKey ? 'owner-key' : 'pin', {});
+    res.json({ ok: true });
+  });
+  r.get('/security/seal', ownerRead, (req, res) => res.json(sealInfo()));
+  r.post('/security/seal', ownerOnly, (req, res) => {
+    const { pin, ownerKey } = req.body || {};
+    if (!verifyPin(String(pin ?? ''), settings.getGroup('security').pinHash)) throw new HttpError(401, 'Wrong PIN', 'bad_pin');
+    if (!checkSecret(normalizeKey(ownerKey), settings.getGroup('security').ownerKeyHash)) throw new HttpError(401, 'Owner Key is not correct', 'bad_owner_key');
+    seal({ pin, ownerKey });
+    audit('security.sealed', 'owner', { ownerRecovery: true });
+    res.json(sealInfo());
+  });
+  r.post('/security/unseal-off', ownerOnly, (req, res) => {
+    if (!verifyPin(String(req.body?.pin ?? ''), settings.getGroup('security').pinHash)) throw new HttpError(401, 'Wrong PIN', 'bad_pin');
+    unsealPermanently();
+    audit('security.seal_removed', 'owner', {});
+    res.json(sealInfo());
+  });
   r.post('/auth/owner/login', local, (req, res) => res.json(ownerLogin(req, res, req.body || {})));
   r.post('/auth/owner/logout', local, (req, res) => { ownerLogout(req, res); res.json({ ok: true }); });
   r.post('/auth/owner/setup', owner, (req, res) => res.json(ownerSetup(req, res, req.body || {})));

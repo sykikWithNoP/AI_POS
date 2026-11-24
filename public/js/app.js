@@ -25,6 +25,7 @@ const app = document.getElementById('app');
 async function start() {
   consoleNotice();
   const auth = await get('/api/auth/state');
+  if (auth.sealed) return renderUnseal();
   if (auth.setupRequired) return renderSetup();
   if (!auth.authenticated) return renderLogin(auth);
   setPinPrompt(askPin);
@@ -66,6 +67,23 @@ function renderSetup() {
       h('div.form-grid', h('h3', '1. Till PIN'), h('p.muted', 'For quick approvals at the till: voids, refunds, big discounts, price changes.'), pin, again),
       h('div.form-grid', h('h3', '2. Owner account'), h('p.muted', 'Opens Overview, Settings and Connectors together with an Owner Key you\'ll get next.'), user, pass, pass2)),
     h('button.btn.primary.block', { onclick: submit }, icon('lock', 16), 'Create and show my Owner Key'))));
+  setTimeout(() => pin.focus(), 50);
+}
+
+/** Sealed keys: after every start, the PIN (or Owner Key) unlocks the POS. */
+function renderUnseal() {
+  const pin = pinInput();
+  const key = h('input.input.mono', { type: 'password', autocomplete: 'off', placeholder: 'OK-XXXXX-…', hidden: true });
+  let useKey = false;
+  const submit = async () => {
+    try { await post('/api/auth/unseal', useKey ? { ownerKey: key.value } : { pin: pin.value }); location.reload(); }
+    catch (e) { errorToast(e); pin.value = ''; key.value = ''; (useKey ? key : pin).focus(); }
+  };
+  for (const el of [pin, key]) el.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+  const toggle = h('button.btn.ghost.sm', { onclick: () => { useKey = !useKey; pin.hidden = useKey; key.hidden = !useKey; toggle.textContent = useKey ? 'Use the PIN instead' : 'Forgot the PIN? Use the Owner Key'; (useKey ? key : pin).focus(); } }, 'Forgot the PIN? Use the Owner Key');
+  app.replaceChildren(h('main.login', h('div.login-card', h('div.brand-mark', icon('lock', 28)), h('h1', 'Start the POS'),
+    h('p.muted', 'Your keys are sealed. Enter the till PIN to unlock this session.'), pin, key,
+    h('button.btn.primary.block', { onclick: submit }, icon('lock', 16), 'Unlock'), toggle)));
   setTimeout(() => pin.focus(), 50);
 }
 

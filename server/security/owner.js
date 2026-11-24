@@ -3,7 +3,7 @@
 // Password and key are stored only as scrypt hashes (inside the encrypted settings).
 import crypto from 'node:crypto';
 import { getGroup, setGroup } from '../services/settings.js';
-import { HttpError, safeEqual } from '../lib.js';
+import { HttpError, safeEqual, rewrap } from '../lib.js';
 import { append as appendLedger } from './ledger.js';
 
 const SCRYPT = { N: 32768, r: 8, p: 1, maxmem: 96 * 1024 * 1024 };
@@ -44,6 +44,7 @@ export function createOwner(username, password) {
   const { u, p } = validateCredentials(username, password);
   const key = generateOwnerKey();
   setGroup('security', { ownerUser: u, ownerPassHash: hashSecret(p), ownerKeyHash: hashSecret(normalizeKey(key)) });
+  rewrap('owner', key);
   appendLedger('security.owner_created', u, {});
   return key;
 }
@@ -70,6 +71,7 @@ export function regenerateKey(password) {
   if (!checkSecret(password, sec.ownerPassHash)) throw new HttpError(401, 'Password is not correct', 'bad_password');
   const key = generateOwnerKey();
   setGroup('security', { ownerKeyHash: hashSecret(normalizeKey(key)) });
+  rewrap('owner', key);
   appendLedger('security.owner_key_replaced', sec.ownerUser, {});
   return key;
 }

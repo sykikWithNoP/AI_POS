@@ -9,7 +9,7 @@
 //  4. Browser mutations need X-POS-Client + same-origin (CSRF); API keys are scoped and never elevated.
 import { getGroup, setGroup } from '../services/settings.js';
 import { authenticate } from '../services/apikeys.js';
-import { HttpError, randomToken, verifyPin, hashPin } from '../lib.js';
+import { HttpError, randomToken, verifyPin, hashPin, isLocked, rewrap } from '../lib.js';
 import { LOCAL_HOSTNAMES } from '../config.js';
 import { append as appendLedger } from '../security/ledger.js';
 import { notify } from '../bus.js';
@@ -181,6 +181,7 @@ export function changePin(req, res, { current, pin }) {
   checkPin(current, 'change_pin');
   if (!/^\d{4,8}$/.test(String(pin ?? ''))) throw new HttpError(400, 'New PIN must be 4–8 digits (the PIN cannot be removed)', 'bad_request');
   setGroup('security', { pinHash: hashPin(pin) });
+  rewrap('pin', pin); // keep the sealed key openable with the new PIN
   sessions.clear(); elevations.clear();
   appendLedger('security.pin_changed', 'owner', {});
   grantSession(res); grantElevation(res);
@@ -209,6 +210,7 @@ export function identify(req) {
 }
 
 export function authState(req) {
+  if (isLocked()) return { sealed: true, local: isLoopback(req) && isLocalHost(req) };
   const sec = getGroup('security');
   let who = null;
   try { who = identify(req); } catch { /* ignore */ }

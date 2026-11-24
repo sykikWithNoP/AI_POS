@@ -172,6 +172,7 @@ export function handleGenericWebhook(body) {
 // --- Background verifier: localhost can't receive provider webhooks, so we poll. ---
 const lastCheck = new Map();
 export async function pollPending() {
+  if ((await import('../lib.js')).isLocked()) return;
   const rows = db.prepare("SELECT id, method, created_at FROM payments WHERE status = 'pending' AND provider_ref IS NOT NULL AND method IN ('esewa','khalti','stripe')").all();
   for (const row of rows) {
     const age = Date.now() - Date.parse(row.created_at);

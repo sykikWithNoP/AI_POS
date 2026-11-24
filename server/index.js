@@ -6,7 +6,7 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { config } from './config.js';
-import { HttpError, log } from './lib.js';
+import { HttpError, log, isLocked } from './lib.js';
 import { apiRouter, webhookRouter } from './http/routes.js';
 import { pagesRouter } from './http/pages.js';
 import { localOnly } from './http/auth.js';
@@ -42,6 +42,11 @@ export function createApp() {
   });
   app.use(express.json({ type: 'application/json', limit: '12mb', verify: (req, res, buf) => { req.rawBody = buf.toString('utf8'); } }));
 
+  // Sealed key, not yet unlocked since start: only the unlock flow and static files work.
+  app.use('/api', (req, res, next) => {
+    if (!isLocked() || req.path === '/auth/state' || req.path === '/auth/unseal') return next();
+    res.status(423).json({ error: 'sealed', message: 'The POS is locked — enter the PIN to start it' });
+  });
   app.use('/api/webhooks', webhookRouter());
   app.use('/api', apiRouter());
   app.use(pagesRouter());
@@ -69,6 +74,7 @@ export function selfCheck() {
     if (config.strictIntegrity) { console.error('Refusing to start: application files were modified.'); process.exit(78); }
     notify({ type: 'security.code_modified', level: 'error', title: 'Application files were modified', body: [...code.changed, ...code.added, ...code.missing].slice(0, 3).join(', ') });
   }
+  if (isLocked()) { log.info('Keys are sealed — waiting for the PIN before verifying records'); return { code, data: null }; }
   const data = verifyLedger();
   if (!data.ok) {
     log.error('Ledger verification failed', { problems: data.problems.slice(0, 5) });

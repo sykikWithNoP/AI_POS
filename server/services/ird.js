@@ -153,7 +153,8 @@ export async function syncAll({ onlyDue = false } = {}) {
 let retryTimer;
 export function startRetryQueue(everyMs = 60_000) {
   clearInterval(retryTimer);
-  retryTimer = setInterval(() => {
+  retryTimer = setInterval(async () => {
+    if ((await import('../lib.js')).isLocked()) return;
     const cfg = getGroup('ird');
     if (cfg.enabled && cfg.autoSync) syncAll({ onlyDue: true }).catch((e) => log.warn('ird retry failed', { err: e.message }));
   }, everyMs);

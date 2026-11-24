@@ -90,7 +90,8 @@ export const restorePending = () => fs.existsSync(RESTORE_PENDING());
 
 /** Hourly check: make an automatic backup when the last one is older than everyHours. */
 export function startBackupSchedule() {
-  const tick = () => {
+  const tick = async () => {
+    if ((await import('../lib.js')).isLocked()) return;
     try {
       const cfg = getGroup('backup');
       if (!cfg.auto) return;
