@@ -40,7 +40,7 @@ export function createApp() {
     });
     next();
   });
-  app.use(express.json({ limit: '5mb', verify: (req, res, buf) => { req.rawBody = buf.toString('utf8'); } }));
+  app.use(express.json({ type: 'application/json', limit: '5mb', verify: (req, res, buf) => { req.rawBody = buf.toString('utf8'); } }));
 
   app.use('/api/webhooks', webhookRouter());
   app.use('/api', apiRouter());
@@ -94,5 +94,6 @@ if (isMain) {
     log.info('POS ready', { url: `http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}` });
   });
   import('./services/ird.js').then((m) => m.startRetryQueue());
+  import('./services/backups.js').then((m) => m.startBackupSchedule());
   setInterval(() => pollPending().catch((e) => log.warn('poll failed', { err: e.message })), config.verifyIntervalMs).unref();
 }

@@ -35,6 +35,7 @@ export const DEFAULTS = {
   checkout: { allowPostpone: false, postponeRequiresCustomer: true, defaultDueDays: 7, maxDiscountPercent: 20 },
   memberships: { defaultPlanId: 0 },
   privacy: { offline: false },
+  backup: { auto: true, everyHours: 24, keep: 14 },
 };
 
 export const SECRET_FIELDS = {

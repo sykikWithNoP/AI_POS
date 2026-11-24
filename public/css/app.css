@@ -503,3 +503,5 @@ body.owner-on .owner-lock { display: none; }
 .steps li { flex: 1; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); color: var(--muted); font-weight: 600; font-size: 13px; counter-increment: s; }
 .steps li::before { content: counter(s) ". "; }
 .steps li.on { background: var(--accent); color: var(--accent-ink); } .steps li.done { color: var(--ok); }
+
+label.btn input[type=file] { display: none; }

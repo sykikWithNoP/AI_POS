@@ -113,3 +113,66 @@ test('IRD made easy: checklist, setup, practice sync, retry backoff, filing pack
   assert.match(regCsv, new RegExp(s.invoice_no));
   await ok('PUT', '/api/settings/ird', { values: { enabled: false } });
 });
+
+test('backups: create, list, validate, stage restore; junk files refused', async () => {
+  const b = await ok('POST', '/api/backups');
+  assert.match(b.name, /^pos-\d{8}-\d{6}-manual\.db$/);
+  const list = await ok('GET', '/api/backups');
+  assert.ok(list.backups.some((x) => x.name === b.name));
+  const junk = await fetch(`${B}/api/restore/upload`, { method: 'POST', headers: { 'X-POS-Client': '1', 'Content-Type': 'application/octet-stream', Cookie: COOKIE }, body: Buffer.from('not a database at all') });
+  assert.equal(junk.status, 400);
+  assert.equal((await call('GET', '/api/backups/..%2F..%2Fpos.db')).status, 400);
+  const staged = await ok('POST', `/api/backups/${b.name}/restore`);
+  assert.equal(staged.staged, true);
+  assert.ok(staged.summary.sales >= 1);
+  assert.equal((await ok('GET', '/api/backups')).restorePending, true);
+  await ok('POST', '/api/restore/cancel');
+});
+
+test('updates: only signed, newer, untampered packages are accepted', async () => {
+  const crypto = await import('node:crypto');
+  const { zip } = await import('../server/util/zip.js');
+  const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
+  globalThis.__POS_UPDATE_PUBKEY__ = publicKey.export({ type: 'spki', format: 'pem' });
+  const upd = await import('../server/services/updates.js');
+  const make = ({ version = '99.0.0', files = { 'server.mjs': 'ok', 'public/index.html': '<p>' }, key = privateKey, extra = [] } = {}) => {
+    const entries = Object.entries(files).map(([n, d]) => ({ name: n, data: Buffer.from(d) }));
+    const manifest = Buffer.from(JSON.stringify({ app: 'free-ai-pos', version, files: Object.fromEntries(entries.map((f) => [f.name, crypto.createHash('sha256').update(f.data).digest('hex')])) }));
+    return zip([{ name: 'manifest.json', data: manifest }, { name: 'manifest.sig', data: crypto.sign(null, manifest, key).toString('base64') }, ...entries.map((f) => ({ name: `files/${f.name}`, data: f.data })), ...extra]);
+  };
+  assert.equal(upd.verifyPackage(make()).manifest.version, '99.0.0');
+  const other = crypto.generateKeyPairSync('ed25519').privateKey;
+  assert.throws(() => upd.verifyPackage(make({ key: other })), /Signature check failed/);
+  assert.throws(() => upd.verifyPackage(make({ version: '0.0.1' })), /not newer/);
+  assert.throws(() => upd.verifyPackage(make({ files: { 'server.mjs': 'x', '../evil.sh': 'rm' } })), /may not install/);
+  assert.throws(() => upd.verifyPackage(make({ extra: [{ name: 'files/public/extra.js', data: Buffer.from('x') }] })), /unsigned file/);
+  const good = make();
+  const i = good.indexOf(Buffer.from('<p>'));
+  good[i] = 0x41; // tamper with a payload byte
+  assert.throws(() => upd.verifyPackage(good), /fingerprint/);
+  assert.throws(() => upd.verifyPackage(Buffer.from('garbage')), /not a valid update/);
+  // Source checkouts refuse to stage (updates install into the released app).
+  assert.equal((await fetch(`${B}/api/updates/upload`, { method: 'POST', headers: { 'X-POS-Client': '1', 'Content-Type': 'application/octet-stream', Cookie: COOKIE }, body: make() })).status, 409);
+  delete globalThis.__POS_UPDATE_PUBKEY__;
+});
+
+test('updater: apply, keep previous, auto-rollback, manual rollback', async () => {
+  const up = await import('../scripts/updater.mjs');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pos-upd-'));
+  const w = (rel, txt) => { fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true }); fs.writeFileSync(path.join(root, rel), txt); };
+  w('server.mjs', 'v1'); w('package.json', '{"version":"1.0.0"}'); w('public/index.html', 'one');
+  w('.update/staged/1.1.0/server.mjs', 'v2'); w('.update/staged/1.1.0/package.json', '{"version":"1.1.0"}'); w('.update/staged/1.1.0/public/index.html', 'two');
+  w('.update/pending.json', '{"version":"1.1.0"}');
+  assert.equal(up.applyStagedUpdate(root, root), true);
+  assert.equal(fs.readFileSync(path.join(root, 'server.mjs'), 'utf8'), 'v2');
+  assert.equal(fs.readFileSync(path.join(root, '.update/versions/1.0.0/server.mjs'), 'utf8'), 'v1');
+  assert.equal(up.isProbation(root), true);
+  up.rollbackUpdate(root); // what the launcher does after 3 failed starts
+  assert.equal(fs.readFileSync(path.join(root, 'server.mjs'), 'utf8'), 'v1');
+  assert.equal(fs.readFileSync(path.join(root, 'public/index.html'), 'utf8'), 'one');
+  w('.update/rollback-request.json', '{"to":"1.0.0"}');
+  assert.equal(up.applyStagedUpdate(root, root), true);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(root, '.update/last-change.json'), 'utf8')).kind, 'rollback');
+  assert.equal(up.cmp('1.10.0', '1.9.9'), 1);
+  fs.rmSync(root, { recursive: true, force: true });
+});

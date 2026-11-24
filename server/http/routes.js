@@ -27,6 +27,9 @@ import * as refunds from '../services/refunds.js';
 import * as themes from '../services/themes.js';
 import * as stock from '../services/stock.js';
 import * as reports from '../services/reports.js';
+import * as backups from '../services/backups.js';
+import * as updates from '../services/updates.js';
+import express from 'express';
 import { allowedDestinations, egressActivity } from '../security/egress.js';
 import * as calendar from '../services/calendar.js';
 import * as stripe from '../providers/stripe.js';
@@ -333,6 +336,19 @@ export function apiRouter() {
     if (!text || text.length > 1500) throw badRequest('text required (max 1500 chars)');
     res.type('image/svg+xml').send(await QRCode.toString(text, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }));
   });
+  // ---------- backups, restore, updates (owner area) ----------
+  const rawBody = express.raw({ type: () => true, limit: '300mb' });
+  r.get('/backups', ownerRead, (req, res) => res.json({ backups: backups.listBackups(), restorePending: backups.restorePending(), settings: settings.getGroup('backup') }));
+  r.post('/backups', ownerOnly, (req, res) => res.status(201).json(backups.createBackup('manual')));
+  r.get('/backups/:name', ownerRead, (req, res) => res.download(backups.backupPath(req.params.name)));
+  r.post('/backups/:name/restore', ownerOnly, (req, res) => res.json(backups.stageRestore({ name: req.params.name })));
+  r.post('/restore/upload', ownerOnly, rawBody, (req, res) => res.json(backups.stageRestore({ buffer: req.body })));
+  r.post('/restore/cancel', ownerOnly, (req, res) => res.json(backups.cancelRestore()));
+  r.get('/updates', ownerRead, (req, res) => res.json(updates.updateStatus()));
+  r.post('/updates/upload', ownerOnly, rawBody, (req, res) => res.json(updates.stageUpdate(req.body)));
+  r.post('/updates/rollback', ownerOnly, (req, res) => res.json(updates.requestRollback(req.body?.to)));
+  r.post('/system/restart', ownerOnly, (req, res) => res.json(updates.restart()));
+
   r.get('/backup.db', ownerOnly, (req, res) => {
     const file = path.join(os.tmpdir(), `pos-backup-${Date.now()}.db`);
     db.exec(`VACUUM INTO '${file.replace(/'/g, "''")}'`);

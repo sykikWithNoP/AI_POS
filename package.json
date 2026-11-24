@@ -1,6 +1,6 @@
 {
   "name": "free-ai-pos",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Advanced self-hosted POS with BYOK integrations: payments, IRD CBMS, Google Calendar, AI copilot and user-built extensions.",
   "type": "module",
   "main": "server/index.js",
@@ -8,12 +8,14 @@
     "node": ">=22.5"
   },
   "scripts": {
-    "start": "node --no-warnings=ExperimentalWarning server/index.js",
+    "start": "node scripts/launcher.mjs",
     "dev": "node --no-warnings=ExperimentalWarning --watch server/index.js",
     "test": "node --no-warnings=ExperimentalWarning --test test/*.test.js",
     "seal": "node scripts/seal.js",
     "build": "node scripts/build.js",
-    "reset-owner": "node --no-warnings=ExperimentalWarning server/index.js --reset-owner"
+    "reset-owner": "node --no-warnings=ExperimentalWarning server/index.js --reset-owner",
+    "server": "node --no-warnings=ExperimentalWarning server/index.js",
+    "keygen": "node scripts/keygen.js"
   },
   "license": "UNLICENSED",
   "dependencies": {

@@ -42,7 +42,8 @@ export function renderSettings(root) {
     integrityCard(),
     privacyCard(),
     extensionsCard(),
-    backupCard()));
+    backupCard(),
+    updatesCard()));
 }
 
 function groupCard(group, title, ic, fields, values, after) {
@@ -213,10 +214,88 @@ function aiBuilder(done) {
 }
 
 function backupCard() {
+  const list = h('ul.keys');
+  const status = h('div');
+  const auto = h('input', { type: 'checkbox' });
+  const every = h('select.input', [6, 12, 24, 48, 168].map((n) => h('option', { value: n }, n === 168 ? 'Weekly' : `Every ${n} hours`)));
+  const keep = h('input.input', { type: 'number', min: 3, max: 365 });
+  const upload = h('input', { type: 'file', accept: '.db,application/octet-stream' });
+  const load = async () => {
+    const r = await get('/api/backups');
+    auto.checked = r.settings.auto; every.value = String(r.settings.everyHours); keep.value = r.settings.keep;
+    status.replaceChildren(r.restorePending ? h('div.integrity.bad', icon('refresh', 18), h('div', h('b', 'A restore is ready. '), 'Restart the POS to apply it. ',
+      h('button.btn.sm', { onclick: restartNow }, 'Restart now'), ' ', h('button.btn.sm', { onclick: async () => { await post('/api/restore/cancel'); load(); } }, 'Cancel restore'))) : '');
+    list.replaceChildren(...(r.backups.length ? r.backups.slice(0, 30).map((b) => h('li',
+      h('div', h('b', new Date(b.created).toLocaleString()), h('small.muted', ` · ${b.reason} · ${(b.bytes / 1024).toFixed(0)} KB`)),
+      h('div.row-actions',
+        h('a.btn.sm', { href: `/api/backups/${encodeURIComponent(b.name)}` }, icon('download', 14), 'Download'),
+        h('button.btn.sm', { onclick: async () => {
+          if (!(await confirmDialog(`Restore the backup from ${new Date(b.created).toLocaleString()}? Your current data is backed up first, then replaced when the POS restarts.`, { okLabel: 'Restore', danger: true }))) return;
+          try { const x = await post(`/api/backups/${encodeURIComponent(b.name)}/restore`); toast(`Restore ready: ${x.summary.sales} bills, ${x.summary.items} items. Restart to apply.`, 'success', 6000); load(); } catch (e) { errorToast(e); }
+        } }, 'Restore')))) : [h('li.muted', 'No backups yet.')]));
+  };
+  upload.addEventListener('change', async () => {
+    const f = upload.files[0];
+    if (!f) return;
+    if (!(await confirmDialog(`Restore from "${f.name}"? It is checked first; your current data is backed up and then replaced on restart.`, { okLabel: 'Check & restore', danger: true }))) return;
+    try {
+      const res = await fetch('/api/restore/upload', { method: 'POST', headers: { 'X-POS-Client': '1', 'Content-Type': 'application/octet-stream' }, body: f });
+      const x = await res.json();
+      if (!res.ok) throw new Error(x.message);
+      toast(`Backup looks good: ${x.summary.sales} bills, ${x.summary.items} items. Restart to apply.`, 'success', 6000); load();
+    } catch (e) { errorToast(e); }
+    upload.value = '';
+  });
+  load().catch(errorToast);
   return h('section.card',
-    h('header.card-head', h('h3', icon('download', 18), 'Backup')),
-    h('p.hint', 'Download a consistent copy of the whole database (items, bills, settings). Keep the data/secret.key file too — it decrypts your saved API keys.'),
-    h('footer.conn-actions', h('a.btn.primary', { href: '/api/backup.db' }, icon('download', 16), 'Download backup')));
+    h('header.card-head', h('h3', icon('download', 18), 'Backups & restore'), h('button.btn.sm.primary', { onclick: async () => { try { await post('/api/backups'); toast('Backup made', 'success'); load(); } catch (e) { errorToast(e); } } }, 'Back up now')),
+    h('p.hint', 'Automatic backups are kept on this PC (data/backups). For safety off the PC, copy a downloaded backup to a USB stick. Keep data/secret.key with it — it unlocks saved keys.'),
+    status,
+    h('div.form-grid.two', h('label.toggle', auto, h('span.track'), h('span', 'Automatic backups')), field('How often', every), field('Keep how many', keep),
+      h('div', h('button.btn', { style: { marginTop: '22px' }, onclick: async () => {
+        try { await put('/api/settings/backup', { values: { auto: auto.checked, everyHours: Number(every.value), keep: Number(keep.value) } }); toast('Saved', 'success'); } catch (e) { errorToast(e); }
+      } }, 'Save'))),
+    h('h4', 'Backups on this PC'), list,
+    h('h4', 'Restore from a file'), h('label.btn', icon('upload', 16), 'Choose backup file…', upload));
+}
+
+async function restartNow() {
+  try { await post('/api/system/restart'); toast('Restarting…', 'info'); setTimeout(() => location.reload(), 5000); } catch (e) { errorToast(e); }
+}
+
+function updatesCard() {
+  const box = h('div');
+  const file = h('input', { type: 'file', accept: '.posupdate' });
+  const load = async () => {
+    const u = await get('/api/updates');
+    box.replaceChildren(
+      h('div.meta-grid', h('div', h('small', 'Installed version'), h('b', u.version)),
+        h('div', h('small', 'Last change'), u.lastChange ? `${u.lastChange.kind} ${u.lastChange.from} → ${u.lastChange.to}` : '—'),
+        h('div', h('small', 'Update check'), u.hasKey ? badge('Signed updates only', 'ok') : badge('No update key', 'warn'))),
+      u.lastChange?.kind === 'auto-rollback' ? h('p.danger-text', `Version ${u.lastChange.from} failed to start, so ${u.lastChange.to} was put back automatically.`) : null,
+      !u.installedCopy ? h('p.hint', 'This is the source version. Updates install into the released app built with “npm run build”.') : null,
+      u.pending ? h('div.integrity.bad', icon('refresh', 18), h('div', h('b', `Update ${u.pending.version} is ready. `), 'Restart to install it. ', h('button.btn.sm', { onclick: restartNow }, 'Restart now'))) : null,
+      u.rollbackTo.length ? h('div.row-actions', h('span.muted', 'Roll back to:'), ...u.rollbackTo.map((v) => h('button.btn.sm', { onclick: async () => {
+        if (!(await confirmDialog(`Go back to version ${v}? Your data is backed up first.`, { okLabel: 'Roll back', danger: true }))) return;
+        try { await post('/api/updates/rollback', { to: v }); toast('Rollback ready', 'success'); await restartNow(); } catch (e) { errorToast(e); }
+      } }, v))) : null);
+  };
+  file.addEventListener('change', async () => {
+    const f = file.files[0];
+    if (!f) return;
+    try {
+      const res = await fetch('/api/updates/upload', { method: 'POST', headers: { 'X-POS-Client': '1', 'Content-Type': 'application/octet-stream' }, body: f });
+      const x = await res.json();
+      if (!res.ok) throw new Error(x.message);
+      toast(`Update ${x.version} verified and ready${x.notes ? ': ' + x.notes : ''}`, 'success', 6000); load();
+    } catch (e) { errorToast(e); }
+    file.value = '';
+  });
+  load().catch(errorToast);
+  return h('section.card',
+    h('header.card-head', h('h3', icon('upload', 18), 'Updates')),
+    h('p.hint', 'Install a new version from a signed .posupdate file (USB stick or download you trust). Nothing is fetched from the internet. Only files signed with your update key are accepted; your data is backed up first, the previous version is kept, and a version that fails to start is rolled back automatically.'),
+    box, h('label.btn.primary', icon('upload', 16), 'Install update file…', file));
 }
 
 // ---------- Memberships: tiers, default tier, and per-customer tier assignment ----------
