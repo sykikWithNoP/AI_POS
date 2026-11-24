@@ -6,6 +6,7 @@ import { connectLive } from './live.js';
 import { loadExtensions, emitExt } from './extensions.js';
 import { applyTheme } from './theme.js';
 import { toggleCopilot } from './copilot.js';
+import { OWNER_AREAS, renderOwnerGate, showOwnerKey, ownerSignOut } from './owner.js';
 import { renderPos, loadItems } from './views/pos.js';
 import { renderOverview } from './views/overview.js';
 import { renderConnectors } from './views/connectors.js';
@@ -45,17 +46,26 @@ function pinInput(label = 'PIN') {
 }
 
 function renderSetup() {
-  const pin = pinInput('New owner PIN'), again = pinInput('Repeat PIN');
+  const pin = pinInput('New PIN'), again = pinInput('Repeat PIN');
+  const user = h('input.input', { autocomplete: 'username', placeholder: 'Owner username' });
+  const pass = h('input.input', { type: 'password', autocomplete: 'new-password', placeholder: 'Owner password (10+ characters)' });
+  const pass2 = h('input.input', { type: 'password', autocomplete: 'new-password', placeholder: 'Repeat password' });
   const submit = async () => {
-    if (!/^\d{4,8}$/.test(pin.value)) return toast('Use 4–8 digits', 'warn');
+    if (!/^\d{4,8}$/.test(pin.value)) return toast('PIN: use 4–8 digits', 'warn');
     if (pin.value !== again.value) return toast('PINs do not match', 'warn');
-    try { await post('/api/auth/setup', { pin: pin.value }); location.reload(); } catch (e) { errorToast(e); }
+    if (pass.value !== pass2.value) return toast('Passwords do not match', 'warn');
+    try {
+      const r = await post('/api/auth/setup', { pin: pin.value, username: user.value, password: pass.value });
+      await showOwnerKey(r.ownerKey, user.value);
+      location.reload();
+    } catch (e) { errorToast(e); }
   };
-  again.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
-  app.replaceChildren(h('main.login', h('div.login-card',
-    h('div.brand-mark', icon('shield', 28)), h('h1', 'Create your owner PIN'),
-    h('p.muted', 'Selling never needs it. Changing prices, tax, tiers, keys or extensions, voiding or refunding bills, and big discounts will ask for it. It cannot be removed — only changed.'),
-    pin, again, h('button.btn.primary.block', { onclick: submit }, icon('lock', 16), 'Create PIN'))));
+  app.replaceChildren(h('main.login', h('div.login-card.wide-card',
+    h('div.brand-mark', icon('shield', 28)), h('h1', 'Set up your POS'),
+    h('div.setup-cols',
+      h('div.form-grid', h('h3', '1. Till PIN'), h('p.muted', 'For quick approvals at the till: voids, refunds, big discounts, price changes.'), pin, again),
+      h('div.form-grid', h('h3', '2. Owner account'), h('p.muted', 'Opens Overview, Settings and Connectors together with an Owner Key you\'ll get next.'), user, pass, pass2)),
+    h('button.btn.primary.block', { onclick: submit }, icon('lock', 16), 'Create and show my Owner Key'))));
   setTimeout(() => pin.focus(), 50);
 }
 
@@ -120,7 +130,7 @@ function renderShell() {
 
   const nav = h('nav.sidenav', { 'aria-label': 'Main' },
     h('div.brand', h('div.brand-mark', icon('cart', 20)), h('span.brand-name', biz.name)),
-    h('ul', NAV.map((n) => h('li', h('a.nav-link', { href: `#/${n.id}`, 'data-id': n.id, title: `${n.label} (Alt+${n.key})` }, icon(n.icon, 22), h('span', n.label))))),
+    h('ul', NAV.map((n) => h('li', h('a.nav-link', { href: `#/${n.id}`, 'data-id': n.id, title: `${n.label} (Alt+${n.key})${OWNER_AREAS.includes(n.id) ? ' · owner' : ''}` }, icon(n.icon, 22), h('span', n.label), OWNER_AREAS.includes(n.id) ? h('span.owner-lock', icon('lock', 12)) : null)))),
     h('div.nav-foot', h('button.nav-link', { onclick: toggleCopilot, title: 'AI copilot' }, icon('sparkles', 22), h('span', 'Copilot'))));
 
   const top = h('header.topbar',
@@ -129,9 +139,18 @@ function renderShell() {
       clock,
       h('button.icon-btn.bell', { 'aria-label': 'Notifications', onclick: bellPanel }, icon('bell', 20), bellCount),
       h('button.icon-btn', { 'aria-label': 'AI copilot', title: 'AI copilot', onclick: toggleCopilot }, icon('sparkles', 20)),
+      h('button.btn.sm.owner-chip', { onclick: () => (getState().boot.ownerSignedIn ? ownerSignOut() : (location.hash = '#/overview')) }),
       h('button.icon-btn', { 'aria-label': 'Lock', title: 'Lock (drop PIN access)', onclick: async () => { await post('/api/auth/logout'); location.reload(); } }, icon('lock', 20))));
 
   app.replaceChildren(h('div.shell', nav, h('div.main', top, h('main#view'))));
+  const drawOwner = () => {
+    const on = !!getState().boot.ownerSignedIn;
+    const chip = document.querySelector('.owner-chip');
+    chip.replaceChildren(icon(on ? 'shield' : 'lock', 14), on ? 'Owner · sign out' : 'Owner sign-in');
+    chip.classList.toggle('on', on);
+    document.body.classList.toggle('owner-on', on);
+  };
+  drawOwner();
   const drawBell = () => {
     const n = getState().notifications.filter((x) => !x.read).length;
     bellCount.textContent = n ? (n > 9 ? '9+' : n) : '';
@@ -140,7 +159,7 @@ function renderShell() {
   drawBell();
   subscribe((s, prev) => {
     if (s.notifications !== prev.notifications) drawBell();
-    if (s.boot !== prev.boot) document.querySelector('.brand-name').textContent = s.boot.settings.business.name;
+    if (s.boot !== prev.boot) { document.querySelector('.brand-name').textContent = s.boot.settings.business.name; drawOwner(); }
   });
 
   document.addEventListener('keydown', (e) => {
@@ -171,10 +190,18 @@ function route() {
   cleanup?.();
   const view = document.getElementById('view');
   view.className = `view-${nav.id}`;
+  if (OWNER_AREAS.includes(nav.id) && !getState().boot.ownerSignedIn) { cleanup = null; renderOwnerGate(view, route); return; }
   try { cleanup = nav.render(view) || null; } catch (e) { errorToast(e); }
   emitExt('view:change', nav.id);
 }
 
 window.addEventListener('pos:locked', () => { toast('Session locked', 'warn'); setTimeout(() => location.reload(), 800); });
 window.addEventListener('pos:setup', () => location.reload());
+// Owner session expired or missing: bring up the sign-in for the current owner area.
+window.addEventListener('pos:owner', async () => {
+  if (!getState().boot) return;
+  dispatch({ type: 'boot', boot: { ...getState().boot, ownerSignedIn: false } });
+  if (OWNER_AREAS.some((a) => location.hash.startsWith(`#/${a}`))) route();
+  else toast('Owner sign-in required for that', 'warn');
+});
 start().catch((e) => { app.replaceChildren(h('main.login', h('div.login-card', h('h1', 'Could not start'), h('p', e.message)))); });

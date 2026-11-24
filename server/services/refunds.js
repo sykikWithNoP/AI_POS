@@ -43,7 +43,7 @@ export function createRefund(saleId, { lines, method = 'cash', reason } = {}) {
       `CN-${sale.invoice_no}-${n}`, sale.ird_status === 'synced' ? 'pending' : 'off');
     for (const p of picked) {
       db.prepare('UPDATE sale_items SET refunded_qty = refunded_qty + ? WHERE id = ?').run(p.qty, p.it.id);
-      if (p.it.item_id) adjustStock(p.it.item_id, p.qty);
+      if (p.it.item_id) adjustStock(p.it.item_id, p.qty, { kind: 'refund', ref: sale.invoice_no, reason: String(reason).slice(0, 120) });
     }
     db.prepare('UPDATE sales SET refunded = refunded + ? WHERE id = ?').run(amount, sale.id);
     if (sale.customer_id) adjustPoints(sale.customer_id, -Math.min(sale.points_earned, pointsFor(amount, sale.customer_id)));

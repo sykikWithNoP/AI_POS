@@ -13,7 +13,7 @@ const server = createApp().listen(0, '127.0.0.1');
 await new Promise((r) => server.once('listening', r));
 const B = `http://127.0.0.1:${server.address().port}`;
 test.after(() => { server.close(); fs.rmSync(dir, { recursive: true, force: true }); });
-const setupRes = await fetch(`${B}/api/auth/setup`, { method: 'POST', headers: { 'X-POS-Client': '1', 'Content-Type': 'application/json' }, body: '{"pin":"1357"}' });
+const setupRes = await fetch(`${B}/api/auth/setup`, { method: 'POST', headers: { 'X-POS-Client': '1', 'Content-Type': 'application/json' }, body: JSON.stringify({ pin: '1357', username: 'owner', password: 'correct horse battery 9' }) });
 const COOKIE = setupRes.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ');
 const call = async (method, p, body) => {
   const res = await fetch(B + p, { method, headers: { 'X-POS-Client': '1', 'Content-Type': 'application/json', Cookie: COOKIE }, body: body ? JSON.stringify(body) : undefined });

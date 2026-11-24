@@ -3,6 +3,7 @@ import { h, icon, toast, errorToast, modal, field, badge, confirmDialog, formVal
 import { get, put, post, del } from '../api.js';
 import { getState, dispatch } from '../store.js';
 import { loadedExtensions } from '../extensions.js';
+import { showOwnerKey, ownerSignOut } from '../owner.js';
 import { applyTheme, THEMES, VAR_KEYS, paletteFromImage, paletteFromHue, prepareImage, setImageVars, contrast } from '../theme.js';
 
 export function renderSettings(root) {
@@ -86,7 +87,19 @@ function securityCard() {
     h('footer.conn-actions', h('button.btn', { onclick: async () => {
       try { await put('/api/settings/security', { values: { lockScreen: lock.checked, elevateMinutes: mins.value } }); dispatch({ type: 'boot', boot: await get('/api/bootstrap') }); toast('Saved', 'success'); } catch (e) { errorToast(e); }
     } }, 'Save')),
-    h('h4', 'Change owner PIN'),
+    h('h4', 'Owner account'),
+    h('p.hint', `Signed in as ${getState().boot.settings.security.ownerUser || 'owner'}. Owner areas sign out after ${sec.ownerIdleMinutes || 30} idle minutes.`),
+    h('div.row-actions',
+      h('button.btn', { onclick: async () => {
+        const pw = h('input.input', { type: 'password', placeholder: 'Owner password' });
+        const pn = h('input.input', { type: 'password', inputMode: 'numeric', placeholder: 'PIN' });
+        modal({ title: 'Replace Owner Key', body: h('div.form-grid', h('p.hint', 'The old key stops working immediately.'), field('Password', pw), field('PIN', pn)),
+          actions: [{ label: 'Replace key', primary: true, onClick: async (c) => {
+            try { const r = await post('/api/auth/owner/new-key', { password: pw.value, pin: pn.value }, { noPinRetry: true }); c(); await showOwnerKey(r.ownerKey, getState().boot.settings.security.ownerUser); } catch (e) { errorToast(e); }
+          } }] });
+      } }, icon('key', 16), 'Replace Owner Key'),
+      h('button.btn', { onclick: () => ownerSignOut() }, icon('lock', 16), 'Sign out of owner area')),
+    h('h4', 'Change till PIN'),
     h('div.form-grid.two', field('Current PIN', current), field('New PIN', pin)),
     h('footer.conn-actions', notifyBtn,
       h('button.btn.primary', { onclick: async () => {

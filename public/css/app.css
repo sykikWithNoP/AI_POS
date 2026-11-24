@@ -457,3 +457,32 @@ ol.rank { counter-reset: r; } ol.rank li::before { counter-increment: r; content
 .egress-list code { font: 12px var(--mono); overflow-wrap: anywhere; }
 @media (max-width: 760px) { .egress-list li { grid-template-columns: 1fr 1fr; } }
 .egress-list li.muted { display: block; }
+
+.stockin-rows { display: grid; gap: 8px; }
+.stockin-row { display: grid; grid-template-columns: 2fr 90px 110px auto auto; gap: 8px; align-items: center; }
+@media (max-width: 760px) { .stockin-row { grid-template-columns: 1fr 1fr; } }
+
+.opt-group { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px 12px; }
+.opt-group legend { font-weight: 650; padding: 0 4px; }
+.span-all { grid-column: 1 / -1; }
+.opt-editor { display: grid; gap: 10px; }
+.opt-group-edit { border: 1px dashed var(--border); border-radius: var(--radius-sm); padding: 10px; display: grid; gap: 8px; }
+.opt-head { display: grid; grid-template-columns: 1fr auto auto auto; gap: 10px; align-items: center; }
+.opt-choices { display: grid; gap: 6px; }
+.opt-choice { display: grid; grid-template-columns: 1fr 120px auto; gap: 6px; }
+
+/* ---------- owner areas ---------- */
+.owner-lock { margin-left: auto; opacity: .55; display: inline-flex; }
+body.owner-on .owner-lock { display: none; }
+.owner-chip.on { border-color: var(--ok); color: var(--ok); }
+.owner-gate { min-height: 70vh; display: grid; place-items: center; }
+.owner-gate .login-card { width: min(440px, 100%); text-align: left; justify-items: stretch; }
+.owner-gate .login-card > .brand-mark, .owner-gate h2 { justify-self: center; }
+.key-field { display: flex; gap: 8px; align-items: center; }
+.key-field label.btn input { display: none; }
+.owner-key { font-size: 17px; letter-spacing: .04em; text-align: center; }
+.login-card.wide-card { width: min(760px, 100%); text-align: left; justify-items: stretch; }
+.login-card.wide-card > .brand-mark, .login-card.wide-card > h1 { justify-self: center; }
+.setup-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.setup-cols h3 { font-size: 15px; }
+@media (max-width: 760px) { .setup-cols { grid-template-columns: 1fr; } .owner-lock { display: none; } }

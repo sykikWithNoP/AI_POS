@@ -5,7 +5,7 @@ import { emit, notify } from '../bus.js';
 import { calculateBill, toMinor, formatMoney } from '../../shared/billing.js';
 import { getGroup, nextSequence } from './settings.js';
 import { bsDate, fiscalYear, fyTag } from '../nepali.js';
-import { adjustStock } from './items.js';
+import { adjustStock, priceWithOptions } from './items.js';
 import { getCustomer, redemptionValue, adjustPoints, pointsFor, recordVisit } from './customers.js';
 import { currentShiftId } from './shifts.js';
 import { getPlan, activePlan, activate } from './memberships.js';
@@ -35,9 +35,11 @@ function buildLines(inputLines) {
     if (!Number.isFinite(qty) || qty <= 0) throw badRequest('Quantity must be positive');
 
     if (l.itemId) {
-      const item = getItem.get(Number(l.itemId));
-      if (!item) throw badRequest(`Item ${l.itemId} no longer exists`);
-      return { itemId: item.id, name: item.name, qty, unitPrice: item.price, taxRate: item.tax_rate, discount: parseDiscount(l.discount) };
+      const row = getItem.get(Number(l.itemId));
+      if (!row) throw badRequest(`Item ${l.itemId} no longer exists`);
+      const item = { ...row, options: row.options ? JSON.parse(row.options) : [] };
+      const priced = priceWithOptions(item, l.options);
+      return { itemId: item.id, name: priced.name, qty, unitPrice: priced.unitPrice, taxRate: item.tax_rate, discount: parseDiscount(l.discount) };
     }
     // Open/custom line (e.g. "Misc"), priced by the cashier.
     const name = String(l.name || '').trim();
@@ -174,7 +176,7 @@ export function settleSale(saleId) {
     if (becamePaid) {
       appendLedger('sale.paid', saleId, { paid, methods });
       // Postponed bills already took stock out when they were issued.
-      if (!s.postponed) for (const it of db.prepare('SELECT item_id, qty FROM sale_items WHERE sale_id = ? AND item_id IS NOT NULL').all(saleId)) adjustStock(it.item_id, -it.qty);
+      if (!s.postponed) for (const it of db.prepare('SELECT item_id, qty FROM sale_items WHERE sale_id = ? AND item_id IS NOT NULL').all(saleId)) adjustStock(it.item_id, -it.qty, { kind: 'sale', ref: s.invoice_no });
       if (s.customer_id) {
         for (const m of db.prepare('SELECT membership_plan_id FROM sale_items WHERE sale_id = ? AND membership_plan_id IS NOT NULL').all(saleId)) activate(s.customer_id, m.membership_plan_id);
         const earned = pointsFor(s.total, s.customer_id);
@@ -205,7 +207,7 @@ export function voidSale(id, reason) {
     db.prepare("UPDATE sales SET status = 'void', void_reason = ? WHERE id = ?").run(String(reason).slice(0, 200), s.id);
     appendLedger('sale.void', s.id, { reason: String(reason).slice(0, 200), wasPaid: s.status === 'paid' });
     db.prepare("UPDATE payments SET status = 'cancelled' WHERE sale_id = ? AND status = 'pending'").run(s.id);
-    if (s.status === 'paid' || s.postponed) for (const it of s.items) if (it.item_id) adjustStock(it.item_id, it.qty - it.refunded_qty);
+    if (s.status === 'paid' || s.postponed) for (const it of s.items) if (it.item_id) adjustStock(it.item_id, it.qty - it.refunded_qty, { kind: 'void', ref: s.invoice_no, reason: String(reason).slice(0, 120) });
     // Give back redeemed points; take back points earned on this bill.
     if (s.customer_id) adjustPoints(s.customer_id, s.points_redeemed - (s.status === 'paid' ? s.points_earned : 0));
   });
@@ -237,7 +239,7 @@ export function postponeSale(id, { dueDate } = {}) {
   tx(() => {
     db.prepare('UPDATE sales SET postponed = 1, due_date = ? WHERE id = ?').run(due.toISOString(), s.id);
     appendLedger('sale.postponed', s.id, { due: due.toISOString() });
-    for (const it of s.items) if (it.item_id) adjustStock(it.item_id, -it.qty);
+    for (const it of s.items) if (it.item_id) adjustStock(it.item_id, -it.qty, { kind: 'sale', ref: s.invoice_no, reason: 'pay later' });
   });
   const sale = getSale(id);
   const sym = getGroup('business').currencySymbol;

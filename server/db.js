@@ -197,6 +197,22 @@ CREATE TABLE IF NOT EXISTS refunds (
 );
 CREATE INDEX IF NOT EXISTS idx_refunds_sale ON refunds(sale_id);
 
+CREATE TABLE IF NOT EXISTS stock_movements (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  item_id     INTEGER REFERENCES items(id) ON DELETE SET NULL,
+  item_name   TEXT NOT NULL,
+  kind        TEXT NOT NULL CHECK (kind IN ('opening','in','adjust','sale','refund','void','edit')),
+  qty         REAL NOT NULL,
+  balance     REAL,
+  unit_cost   INTEGER,
+  reason      TEXT,
+  supplier    TEXT,
+  ref         TEXT,
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_stock_mov_item ON stock_movements(item_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_stock_mov_created ON stock_movements(created_at);
+
 CREATE TABLE IF NOT EXISTS themes (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   name        TEXT NOT NULL CHECK (length(name) > 0),
@@ -224,6 +240,7 @@ CREATE TABLE IF NOT EXISTS notifications (
 const COLUMNS = {
   sales: { postponed: 'INTEGER NOT NULL DEFAULT 0', due_date: 'TEXT', member_discount: 'INTEGER NOT NULL DEFAULT 0', customer_id: 'INTEGER REFERENCES customers(id)', shift_id: 'INTEGER REFERENCES shifts(id)', refunded: 'INTEGER NOT NULL DEFAULT 0', points_earned: 'INTEGER NOT NULL DEFAULT 0', points_redeemed: 'INTEGER NOT NULL DEFAULT 0' },
   sale_items: { refunded_qty: 'REAL NOT NULL DEFAULT 0', membership_plan_id: 'INTEGER REFERENCES membership_plans(id)' },
+  items: { options: 'TEXT' },
   customers: { plan_id: 'INTEGER REFERENCES membership_plans(id)', member_since: 'TEXT', member_until: 'TEXT' },
   payments: { shift_id: 'INTEGER REFERENCES shifts(id)' },
 };
@@ -284,6 +301,8 @@ WHEN NEW.amount IS NOT OLD.amount OR NEW.sale_id IS NOT OLD.sale_id OR NEW.lines
   OR NEW.credit_note IS NOT OLD.credit_note OR NEW.created_at IS NOT OLD.created_at OR NEW.tax IS NOT OLD.tax OR NEW.taxable IS NOT OLD.taxable
 BEGIN SELECT RAISE(ABORT, 'refunds cannot be changed'); END;
 
+CREATE TRIGGER IF NOT EXISTS stock_mov_no_update BEFORE UPDATE OF item_name, kind, qty, balance, unit_cost, reason, supplier, ref, created_at ON stock_movements BEGIN SELECT RAISE(ABORT, 'stock history is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS stock_mov_no_delete BEFORE DELETE ON stock_movements BEGIN SELECT RAISE(ABORT, 'stock history is append-only'); END;
 CREATE TRIGGER IF NOT EXISTS cash_moves_no_update BEFORE UPDATE ON cash_movements BEGIN SELECT RAISE(ABORT, 'cash movements are append-only'); END;
 CREATE TRIGGER IF NOT EXISTS cash_moves_no_delete BEFORE DELETE ON cash_movements BEGIN SELECT RAISE(ABORT, 'cash movements are append-only'); END;
 CREATE TRIGGER IF NOT EXISTS shifts_closed_final BEFORE UPDATE ON shifts WHEN OLD.status = 'closed' BEGIN SELECT RAISE(ABORT, 'closed shifts are final'); END;

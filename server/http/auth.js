@@ -13,12 +13,15 @@ import { HttpError, randomToken, verifyPin, hashPin } from '../lib.js';
 import { LOCAL_HOSTNAMES } from '../config.js';
 import { append as appendLedger } from '../security/ledger.js';
 import { notify } from '../bus.js';
+import { ownerExists, createOwner, verifyOwner, resetPassword, regenerateKey, validateCredentials as validateOwnerInput } from '../security/owner.js';
 
 const sessions = new Map();   // token -> expiresAt (only used when lockScreen is on)
 const elevations = new Map(); // token -> expiresAt
+const ownerSessions = new Map(); // token -> { exp, idleMs }
 const SESSION_MS = 12 * 3600_000;
 const COOKIE = 'pos_session';
 const ELEV = 'pos_elev';
+const OWNER = 'pos_owner';
 
 export const isLoopback = (req) => ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress);
 const hostOf = (req) => String(req.headers.host || '').replace(/:\d+$/, '').replace(/^\[|\]$/g, '').toLowerCase();
@@ -69,7 +72,72 @@ function checkPin(pin, action) {
   }
   throw new HttpError(401, 'Wrong PIN', 'bad_pin');
 }
-export const _resetAttempts = () => { attempts.fails = 0; attempts.lockedUntil = 0; };
+const ownerAttempts = { fails: 0, lockedUntil: 0 };
+export const _resetAttempts = () => { attempts.fails = 0; attempts.lockedUntil = 0; ownerAttempts.fails = 0; ownerAttempts.lockedUntil = 0; };
+
+function ownerGuardAttempt(ok, action) {
+  if (ok) { ownerAttempts.fails = 0; return; }
+  ownerAttempts.fails++;
+  appendLedger('security.owner_failed', action, { fails: ownerAttempts.fails });
+  if (ownerAttempts.fails >= 5) {
+    const lockMs = Math.min(3600_000, 60_000 * 2 ** (ownerAttempts.fails - 5));
+    ownerAttempts.lockedUntil = Date.now() + lockMs;
+    notify({ type: 'security.lockout', level: 'error', title: 'Owner sign-in locked after repeated failures', body: `Locked for ${Math.round(lockMs / 1000)}s` });
+  }
+  throw new HttpError(401, 'Sign-in failed. Check the username, password and Owner Key.', 'owner_failed');
+}
+function ownerLocked() {
+  if (Date.now() < ownerAttempts.lockedUntil) throw new HttpError(429, `Too many failed sign-ins. Try again in ${Math.ceil((ownerAttempts.lockedUntil - Date.now()) / 1000)}s.`, 'owner_locked');
+}
+
+function grantOwner(res) {
+  const token = randomToken(32);
+  const idleMs = Math.max(5, Math.min(240, Number(getGroup('security').ownerIdleMinutes) || 30)) * 60_000;
+  ownerSessions.set(token, { exp: Date.now() + idleMs, idleMs });
+  res.append('Set-Cookie', `${OWNER}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${12 * 3600}`);
+}
+/** Owner session check with sliding idle timeout. */
+export function isOwner(req) {
+  const t = cookie(req, OWNER);
+  const s = t && ownerSessions.get(t);
+  if (!s) return false;
+  if (s.exp < Date.now()) { ownerSessions.delete(t); return false; }
+  s.exp = Date.now() + s.idleMs;
+  return true;
+}
+
+export function ownerLogin(req, res, { username, password, key }) {
+  ownerLocked();
+  if (!ownerExists()) throw new HttpError(428, 'Create the owner account first', 'owner_setup_required');
+  ownerGuardAttempt(verifyOwner(username, password, key), 'login');
+  grantOwner(res); grantElevation(res);
+  appendLedger('security.owner_signed_in', 'owner', {});
+  return { ok: true };
+}
+export function ownerLogout(req, res) {
+  ownerSessions.delete(cookie(req, OWNER));
+  setCookie(res, OWNER, '', 0);
+}
+/** Existing install without an owner account: create one (needs the PIN). */
+export function ownerSetup(req, res, { pin, username, password }) {
+  if (ownerExists()) throw new HttpError(409, 'Owner account already exists', 'conflict');
+  checkPin(pin, 'owner_setup');
+  const key = createOwner(username, password);
+  grantOwner(res); grantElevation(res);
+  return { ok: true, ownerKey: key };
+}
+export function ownerResetPassword(req, res, { pin, key, password }) {
+  ownerLocked();
+  checkPin(pin, 'owner_reset');
+  try { resetPassword(key, password); } catch (e) { if (e.code === 'bad_owner_key') ownerGuardAttempt(false, 'reset_password'); throw e; }
+  return { ok: true };
+}
+export function ownerNewKey(req, res, { pin, password }) {
+  ownerLocked();
+  checkPin(pin, 'owner_new_key');
+  try { return { ok: true, ownerKey: regenerateKey(password) }; } catch (e) { if (e.code === 'bad_password') ownerGuardAttempt(false, 'new_key'); throw e; }
+}
+export const clearOwnerSessions = () => ownerSessions.clear();
 
 function grantElevation(res) {
   const token = randomToken(24);
@@ -84,12 +152,14 @@ function grantSession(res) {
 }
 
 /** First run: create the owner PIN. Only possible while none exists. */
-export function setup(req, res, pin) {
+export function setup(req, res, { pin, username, password } = {}) {
   if (pinSet()) throw new HttpError(409, 'Owner PIN already set', 'conflict');
   if (!/^\d{4,8}$/.test(String(pin ?? ''))) throw new HttpError(400, 'PIN must be 4–8 digits', 'bad_request');
+  if (username !== undefined) validateOwnerInput(username, password);
   setGroup('security', { pinHash: hashPin(pin) });
   appendLedger('security.pin_created', 'owner', {});
   grantSession(res); grantElevation(res);
+  if (username !== undefined) { const key = createOwner(username, password); grantOwner(res); return { ok: true, ownerKey: key }; }
   return { ok: true };
 }
 
@@ -118,12 +188,12 @@ export function changePin(req, res, { current, pin }) {
 }
 
 export function logout(req, res) {
-  sessions.delete(cookie(req, COOKIE)); elevations.delete(cookie(req, ELEV));
-  setCookie(res, COOKIE, '', 0); setCookie(res, ELEV, '', 0);
+  sessions.delete(cookie(req, COOKIE)); elevations.delete(cookie(req, ELEV)); ownerSessions.delete(cookie(req, OWNER));
+  setCookie(res, COOKIE, '', 0); setCookie(res, ELEV, '', 0); setCookie(res, OWNER, '', 0);
 }
 export const dropElevation = (req) => elevations.delete(cookie(req, ELEV));
 
-export const isElevated = (req) => valid(elevations, cookie(req, ELEV));
+export const isElevated = (req) => valid(elevations, cookie(req, ELEV)) || isOwner(req);
 
 /** Who is calling: { kind: 'owner' } | { kind: 'apikey', scopes } | null. */
 export function identify(req) {
@@ -142,7 +212,8 @@ export function authState(req) {
   const sec = getGroup('security');
   let who = null;
   try { who = identify(req); } catch { /* ignore */ }
-  return { setupRequired: !sec.pinHash, lockScreen: !!sec.lockScreen, authenticated: who?.kind === 'owner', elevated: isElevated(req), local: isLoopback(req) && isLocalHost(req) };
+  return { setupRequired: !sec.pinHash, lockScreen: !!sec.lockScreen, authenticated: who?.kind === 'owner', elevated: isElevated(req), local: isLoopback(req) && isLocalHost(req),
+    owner: { exists: !!sec.ownerUser, signedIn: isOwner(req) } };
 }
 
 function csrf(req) {
@@ -169,8 +240,10 @@ export function csrfOnly(req, res, next) {
  *   requireAuth({ scope: true })  owner, or an API key with read (GET) / write scope
  *   requireAuth({ elevated: true }) owner who re-entered the PIN recently (protected rules & records)
  *   requireAuth({ scope: true, elevatedOwner: true }) elevated owner, or a write-scoped API key
+ *   requireAuth({ ownerArea: true }) owner signed in with username + password + Owner Key
+ *   An owner session also satisfies PIN elevation.
  */
-export function requireAuth({ scope, elevated, elevatedOwner } = {}) {
+export function requireAuth({ scope, elevated, elevatedOwner, ownerArea } = {}) {
   return (req, res, next) => {
     if (!pinSet()) throw new HttpError(428, 'Create the owner PIN first', 'setup_required');
     const who = identify(req);
@@ -181,6 +254,10 @@ export function requireAuth({ scope, elevated, elevatedOwner } = {}) {
       if (!who.scopes.includes(need)) throw new HttpError(403, `API key lacks '${need}' scope`, 'forbidden');
     } else {
       csrf(req);
+      if (ownerArea && !isOwner(req)) {
+        if (!ownerExists()) throw new HttpError(403, 'Create the owner account to open this area', 'owner_setup_required');
+        throw new HttpError(403, 'Owner sign-in required', 'owner_required');
+      }
       if ((elevated || elevatedOwner) && !isElevated(req)) throw new HttpError(403, 'Owner PIN required for this action', 'pin_required');
     }
     req.who = who;

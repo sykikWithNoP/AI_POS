@@ -1,11 +1,13 @@
 // AI copilot drawer (BYOK Anthropic). Conversation lives in memory for this tab only.
-import { h, icon, errorToast } from './ui.js';
+import { h, icon, errorToast, toast } from './ui.js';
+import { getState } from './store.js';
 import { post } from './api.js';
 
 let open = false;
 const history = [];
 
 export function toggleCopilot() {
+  if (!open && !getState().boot?.ownerSignedIn) { toast('The copilot sees your business numbers — sign in as owner first', 'warn'); location.hash = '#/overview'; return; }
   open = !open;
   document.querySelector('.copilot')?.remove();
   if (open) document.body.append(drawer());

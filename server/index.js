@@ -78,6 +78,14 @@ export function selfCheck() {
 }
 
 const isMain = globalThis.__POS_BUNDLED__ || (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href);
+if (isMain && process.argv.includes('--reset-owner')) {
+  // Local recovery for a lost owner password AND Owner Key. Needs access to this PC's files;
+  // keeps all data and the PIN, and is recorded in the signed ledger.
+  const { clearOwner } = await import('./security/owner.js');
+  clearOwner();
+  console.log('Owner account cleared. Open the POS and create a new owner account (the PIN is required).');
+  process.exit(0);
+}
 if (isMain) {
   selfCheck();
   startNotifiers();

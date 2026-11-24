@@ -23,7 +23,7 @@ const B = `http://127.0.0.1:${server.address().port}`;
 test.after(() => { server.close(); fs.rmSync(dir, { recursive: true, force: true }); });
 
 // First run: create the owner PIN; the response sets session + elevation cookies.
-const setupRes = await fetch(`${B}/api/auth/setup`, { method: 'POST', headers: { 'X-POS-Client': '1', 'Content-Type': 'application/json' }, body: '{"pin":"2468"}' });
+const setupRes = await fetch(`${B}/api/auth/setup`, { method: 'POST', headers: { 'X-POS-Client': '1', 'Content-Type': 'application/json' }, body: JSON.stringify({ pin: '2468', username: 'owner', password: 'correct horse battery 9' }) });
 let COOKIE = setupRes.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ');
 const call = async (method, p, body, headers = {}) => {
   const res = await fetch(B + p, { method, headers: { 'X-POS-Client': '1', 'Content-Type': 'application/json', Cookie: COOKIE, ...headers }, body: body ? JSON.stringify(body) : undefined });

@@ -12,7 +12,7 @@ export function cartToSaleInput(cart, totals) {
   const disc = (d) => (d ? { type: d.type, value: d.type === 'amount' ? toMajor(d.value) : d.value } : undefined);
   return {
     lines: cart.lines.map((l) => (l.membershipPlanId ? { membershipPlanId: l.membershipPlanId }
-      : l.itemId ? { itemId: l.itemId, qty: l.qty, discount: disc(l.discount) }
+      : l.itemId ? { itemId: l.itemId, qty: l.qty, discount: disc(l.discount), ...(l.options ? { options: l.options } : {}) }
         : { name: l.name, unitPrice: toMajor(l.unitPrice), qty: l.qty, taxRate: l.taxRate, discount: disc(l.discount) })),
     customerId: cart.customer?.id || undefined,
     redeemPoints: cart.redeemPoints || undefined,

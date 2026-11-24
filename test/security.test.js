@@ -28,12 +28,14 @@ const req = async (method, p, body, cookie = '', extra = {}) => {
   return { status: res.status, json, cookies: res.headers.getSetCookie() };
 };
 const jar = (cookies) => cookies.map((c) => c.split(';')[0]).join('; ');
-let FULL, SESSION_ONLY = '';
+let FULL, OWNER_KEY, SESSION_ONLY = '';
 
 test('owner PIN must be created first, once', async () => {
   assert.equal((await req('GET', '/api/bootstrap')).status, 428);
   assert.equal((await req('POST', '/api/auth/setup', { pin: '12' })).status, 400);
-  const r = await req('POST', '/api/auth/setup', { pin: '4321' });
+  const r = await req('POST', '/api/auth/setup', { pin: '4321', username: 'boss', password: 'Very-long-pass 42' });
+  assert.match(r.json.ownerKey, /^OK(-[A-Z2-9]{5}){6}$/);
+  OWNER_KEY = r.json.ownerKey;
   assert.equal(r.status, 200);
   FULL = jar(r.cookies);
   assert.equal((await req('POST', '/api/auth/setup', { pin: '9999' })).status, 409);
@@ -52,9 +54,12 @@ test('only this computer: other hosts and cross-origin calls are refused', async
 });
 
 test('protected actions need the PIN re-entered; API keys can never do them', async () => {
-  const noElev = await req('PUT', '/api/settings/tax', { values: { rate: 0 } });
-  assert.equal(noElev.status, 403);
-  assert.equal(noElev.json.error, 'pin_required');
+  const noOwner = await req('PUT', '/api/settings/tax', { values: { rate: 0 } });
+  assert.equal(noOwner.status, 403);
+  assert.equal(noOwner.json.error, 'owner_required'); // settings are an owner area
+  const sale = (await req('POST', '/api/sales', { lines: [{ name: 'X', unitPrice: 10, qty: 1 }] })).json;
+  const noPin = await req('POST', `/api/sales/${sale.id}/void`, { reason: 'test' });
+  assert.equal(noPin.json.error, 'pin_required'); // till actions still take the PIN
   assert.equal(settings.getGroup('tax').rate, 13);
   assert.equal((await req('PUT', '/api/settings/tax', { values: { rate: 13 } }, FULL)).status, 200);
   const key = (await req('POST', '/api/keys', { name: 'k', scopes: ['read', 'write'] }, FULL)).json.key;
@@ -195,4 +200,58 @@ test('external images are refused; uploads only', async () => {
   const csp = (await fetch(`${B}/`)).headers.get('content-security-policy');
   assert.match(csp, /img-src 'self' data: blob:;/);
   assert.equal((await fetch(`${B}/`)).headers.get('referrer-policy'), 'no-referrer');
+});
+
+test('owner areas need username + password + Owner Key; till does not', async () => {
+  const { _resetAttempts } = await import('../server/http/auth.js');
+  _resetAttempts();
+  // Without the owner session: till works, owner areas refuse, and the till gets no connector config.
+  const boot = await req('GET', '/api/bootstrap');
+  assert.equal(boot.status, 200);
+  assert.equal(boot.json.settings.ird.username, undefined);
+  assert.equal(boot.json.settings.ai, undefined);
+  for (const p of ['/api/overview', '/api/settings', '/api/keys', '/api/sales', '/api/audit', '/api/privacy/egress']) {
+    const r = await req('GET', p);
+    assert.equal(r.status, 403, p);
+    assert.equal(r.json.error, 'owner_required', p);
+  }
+  assert.equal((await req('POST', '/api/ai/chat', { messages: [{ role: 'user', content: 'hi' }] })).status, 403);
+  // Each factor matters; the error never says which one.
+  for (const [u, pw, k] of [['boss', 'wrong-password-1', OWNER_KEY], ['boss', 'Very-long-pass 42', 'OK-AAAAA-AAAAA-AAAAA-AAAAA-AAAAA-AAAAA'], ['nobody', 'Very-long-pass 42', OWNER_KEY]]) {
+    const r = await req('POST', '/api/auth/owner/login', { username: u, password: pw, key: k });
+    assert.equal(r.status, 401);
+    assert.match(r.json.message, /username, password and Owner Key/);
+  }
+  const ok = await req('POST', '/api/auth/owner/login', { username: 'BOSS', password: 'Very-long-pass 42', key: OWNER_KEY.toLowerCase().replace(/-/g, ' ') });
+  assert.equal(ok.status, 200);
+  const OWN = jar(ok.cookies);
+  assert.equal((await req('GET', '/api/overview', null, OWN)).status, 200);
+  assert.ok((await req('GET', '/api/bootstrap', null, OWN)).json.settings.ai);
+  await req('POST', '/api/auth/owner/logout', {}, OWN);
+  assert.equal((await req('GET', '/api/overview', null, OWN)).status, 403);
+});
+
+test('owner sign-in locks out after repeated failures', async () => {
+  const { _resetAttempts } = await import('../server/http/auth.js');
+  _resetAttempts();
+  for (let i = 0; i < 5; i++) await req('POST', '/api/auth/owner/login', { username: 'boss', password: 'nope-nope-nope', key: OWNER_KEY });
+  const r = await req('POST', '/api/auth/owner/login', { username: 'boss', password: 'Very-long-pass 42', key: OWNER_KEY });
+  assert.equal(r.status, 429);
+  _resetAttempts();
+});
+
+test('owner recovery: reset password with key + PIN, replace key with password + PIN', async () => {
+  const { _resetAttempts } = await import('../server/http/auth.js');
+  _resetAttempts();
+  assert.equal((await req('POST', '/api/auth/owner/reset-password', { pin: '4321', key: 'OK-AAAAA-AAAAA-AAAAA-AAAAA-AAAAA-AAAAA', password: 'Brand-new pass 77' })).status, 401);
+  assert.equal((await req('POST', '/api/auth/owner/reset-password', { pin: '4321', key: OWNER_KEY, password: 'Brand-new pass 77' })).status, 200);
+  const login = await req('POST', '/api/auth/owner/login', { username: 'boss', password: 'Brand-new pass 77', key: OWNER_KEY });
+  assert.equal(login.status, 200);
+  const nk = await req('POST', '/api/auth/owner/new-key', { pin: '4321', password: 'Brand-new pass 77' }, jar(login.cookies));
+  assert.equal(nk.status, 200);
+  assert.notEqual(nk.json.ownerKey, OWNER_KEY);
+  assert.equal((await req('POST', '/api/auth/owner/login', { username: 'boss', password: 'Brand-new pass 77', key: OWNER_KEY })).status, 401); // old key dead
+  assert.equal((await req('POST', '/api/auth/owner/login', { username: 'boss', password: 'Brand-new pass 77', key: nk.json.ownerKey })).status, 200);
+  assert.equal((await req('POST', '/api/auth/setup', { pin: '1111', username: 'x', password: 'whatever-123456' })).status, 409);
+  _resetAttempts();
 });

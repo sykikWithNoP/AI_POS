@@ -99,7 +99,7 @@ function renderSell(root) {
     },
     h('span.p-emoji', i.emoji || i.name.slice(0, 2).toUpperCase()),
     h('span.p-name', i.name),
-    h('span.p-price', money(i.price)),
+    h('span.p-price', money(i.price), i.options?.length ? h('small.muted', ' +options') : null),
     i.stock !== null && i.stock !== undefined ? h(`span.p-stock${i.stock <= 0 ? '.out' : i.stock <= 5 ? '.low' : ''}`, `${i.stock} ${i.unit}`) : null)));
     if (!list.length) grid.append(empty('No matches'));
   };
@@ -210,8 +210,48 @@ function membershipAction() {
 }
 
 function addToCart(item) {
+  if (item.options?.length) return optionsPicker(item);
   dispatch({ type: 'cart/add', item });
   emitExt('cart:change', getState().cart);
+}
+
+/** Variants & add-ons: pick choices; the price shown is recomputed by the server at checkout. */
+function optionsPicker(item) {
+  const picked = new Map(); // group -> Set(choice)
+  for (const g of item.options) picked.set(g.name, new Set(g.required && !g.multi ? [g.choices[0].name] : []));
+  const priceEl = h('b');
+  const calc = () => {
+    let p = item.price;
+    for (const g of item.options) for (const c of g.choices) if (picked.get(g.name).has(c.name)) p += c.price;
+    priceEl.textContent = money(p);
+    return p;
+  };
+  const groups = item.options.map((g) => h('fieldset.opt-group',
+    h('legend', g.name, g.required ? h('small.muted', ' · required') : null, g.multi ? h('small.muted', ' · pick any') : null),
+    h('div.chips', g.choices.map((c) => {
+      const btn = h(`button.chip${picked.get(g.name).has(c.name) ? '.active' : ''}`, { type: 'button', onclick: () => {
+        const set = picked.get(g.name);
+        if (g.multi) set.has(c.name) ? set.delete(c.name) : set.add(c.name);
+        else { if (set.has(c.name) && !g.required) set.clear(); else { set.clear(); set.add(c.name); } }
+        for (const b of btn.parentElement.children) b.classList.toggle('active', set.has(b.dataset.choice));
+        calc();
+      } }, c.name, c.price ? h('small', ` ${c.price > 0 ? '+' : '−'}${money(Math.abs(c.price))}`) : null);
+      btn.dataset.choice = c.name;
+      return btn;
+    }))));
+  calc();
+  modal({
+    title: item.name, body: h('div.form-grid', ...groups, h('div.t-row.grand', h('span', 'Price'), priceEl)),
+    actions: [{ label: 'Add to bill', primary: true, onClick: (close) => {
+      for (const g of item.options) if (g.required && !picked.get(g.name).size) return toast(`Choose ${g.name}`, 'warn');
+      const options = [];
+      const labels = [];
+      for (const g of item.options) for (const c of g.choices) if (picked.get(g.name).has(c.name)) { options.push({ group: g.name, choice: c.name }); labels.push(c.name); }
+      dispatch({ type: 'cart/add', item, options, unitPrice: calc(), label: labels.length ? `${item.name} (${labels.join(', ')})` : item.name });
+      emitExt('cart:change', getState().cart);
+      close();
+    } }],
+  });
 }
 
 async function addOpenItem() {

@@ -28,9 +28,10 @@ function cartReducer(c, a) {
     case 'cart/add': {
       const lines = [...c.lines];
       if (a.item.membershipPlanId && lines.some((l) => l.membershipPlanId)) return c; // one membership per bill
-      const i = a.item.id ? lines.findIndex((l) => l.itemId === a.item.id && !l.discount) : -1;
+      const optSig = JSON.stringify(a.options || []);
+      const i = a.item.id ? lines.findIndex((l) => l.itemId === a.item.id && !l.discount && JSON.stringify(l.options || []) === optSig) : -1;
       if (i >= 0) lines[i] = { ...lines[i], qty: lines[i].qty + (a.qty || 1) };
-      else lines.push({ key: uid(), itemId: a.item.id || null, membershipPlanId: a.item.membershipPlanId || null, name: a.item.name, category: a.item.category || 'Custom', unitPrice: a.item.price, taxRate: a.item.tax_rate ?? null, qty: a.item.membershipPlanId ? 1 : a.qty || 1, emoji: a.item.emoji, discount: null });
+      else lines.push({ key: uid(), itemId: a.item.id || null, membershipPlanId: a.item.membershipPlanId || null, options: a.options || null, name: a.label || a.item.name, category: a.item.category || 'Custom', unitPrice: a.unitPrice ?? a.item.price, taxRate: a.item.tax_rate ?? null, qty: a.item.membershipPlanId ? 1 : a.qty || 1, emoji: a.item.emoji, discount: null });
       return { ...c, lines };
     }
     case 'cart/qty': return { ...c, lines: c.lines.map((l) => (l.key === a.key ? { ...l, qty: l.membershipPlanId ? Math.min(1, Math.max(0, a.qty)) : Math.max(0, a.qty) } : l)).filter((l) => l.qty > 0) };

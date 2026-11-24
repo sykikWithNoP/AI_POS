@@ -6,7 +6,7 @@ import path from 'node:path';
 import QRCode from 'qrcode';
 import { db } from '../db.js';
 import { HttpError, badRequest, safeEqual, hmacHex, randomToken } from '../lib.js';
-import { requireAuth, login, logout, authState, setup, elevate, changePin, dropElevation, csrfOnly } from './auth.js';
+import { requireAuth, login, logout, authState, setup, elevate, changePin, dropElevation, csrfOnly, isOwner, ownerLogin, ownerLogout, ownerSetup, ownerResetPassword, ownerNewKey } from './auth.js';
 import { append as appendLedger, verify as verifyLedger, recent as ledgerRecent } from '../security/ledger.js';
 import { toCsv, parseCsv } from './csv.js';
 import { sseHandler, listNotifications, markAllRead } from '../bus.js';
@@ -25,6 +25,7 @@ import * as memberships from '../services/memberships.js';
 import * as shifts from '../services/shifts.js';
 import * as refunds from '../services/refunds.js';
 import * as themes from '../services/themes.js';
+import * as stock from '../services/stock.js';
 import { allowedDestinations, egressActivity } from '../security/egress.js';
 import * as calendar from '../services/calendar.js';
 import * as stripe from '../providers/stripe.js';
@@ -50,18 +51,29 @@ export function apiRouter() {
   const pin = audited(requireAuth({ elevated: true }));                       // owner + PIN re-entered
   const pinOrKey = audited(requireAuth({ scope: true, elevatedOwner: true })); // owner + PIN, or write-scoped API key
   const local = csrfOnly;
+  // Owner areas (Overview, Settings, Connectors, reports, AI, keys, backups, updates):
+  // need the owner signed in with username + password + Owner Key.
+  const ownerOnly = audited(requireAuth({ ownerArea: true }));
+  const ownerRead = requireAuth({ ownerArea: true });
+  const ownerOrKey = requireAuth({ ownerArea: true, scope: true }); // or a read-scoped API key
 
   // ---------- auth & bootstrap ----------
   r.get('/auth/state', (req, res) => res.json(authState(req)));
   r.post('/auth/login', local, (req, res) => res.json(login(req, res, req.body?.pin)));
   r.post('/auth/logout', (req, res) => { logout(req, res); res.json({ ok: true }); });
-  r.post('/auth/setup', local, (req, res) => res.json(setup(req, res, req.body?.pin)));
+  r.post('/auth/setup', local, (req, res) => res.json(setup(req, res, req.body || {})));
+  r.post('/auth/owner/login', local, (req, res) => res.json(ownerLogin(req, res, req.body || {})));
+  r.post('/auth/owner/logout', local, (req, res) => { ownerLogout(req, res); res.json({ ok: true }); });
+  r.post('/auth/owner/setup', owner, (req, res) => res.json(ownerSetup(req, res, req.body || {})));
+  r.post('/auth/owner/reset-password', local, (req, res) => res.json(ownerResetPassword(req, res, req.body || {})));
+  r.post('/auth/owner/new-key', ownerRead, (req, res) => res.json(ownerNewKey(req, res, req.body || {})));
   r.post('/auth/elevate', owner, (req, res) => res.json(elevate(req, res, req.body?.pin)));
   r.post('/auth/drop', owner, (req, res) => { dropElevation(req); res.json({ ok: true }); });
   r.post('/auth/pin', owner, (req, res) => res.json(changePin(req, res, req.body || {})));
 
   r.get('/bootstrap', owner, (req, res) => res.json({
-    settings: settings.publicSettings(),
+    settings: isOwner(req) ? settings.publicSettings() : settings.tillSettings(),
+    ownerSignedIn: isOwner(req),
     methods: payments.availableMethods(),
     categories: items.categories(),
     extensions: exts.verifiedEnabledExtensions().map((e) => ({ id: e.id, name: e.name, code: e.code })),
@@ -96,13 +108,16 @@ export function apiRouter() {
   r.post('/items', pinOrKey, (req, res) => res.status(201).json(items.createItem(req.body || {})));
   r.put('/items/:id', pinOrKey, (req, res) => { const it = items.updateItem(req.params.id, req.body || {}); audit('item.updated', it.id, { name: it.name, price: it.price, tax_rate: it.tax_rate }); res.json(it); });
   r.delete('/items/:id', pinOrKey, (req, res) => { const r2 = items.deleteItem(req.params.id); audit('item.deleted', req.params.id, {}); res.json(r2); });
+  r.post('/stock/in', owner, (req, res) => res.status(201).json(stock.stockIn(req.body || {})));
+  r.post('/stock/adjust', pin, (req, res) => res.json(stock.adjust(req.body || {})));
+  r.get('/stock/history', scoped, (req, res) => res.json(stock.history(req.query)));
   r.get('/categories', scoped, (req, res) => res.json(items.categories()));
 
   // ---------- sales ----------
   r.post('/sales/quote', scoped, (req, res) => res.json(sales.quote(req.body || {})));
   r.post('/sales', scoped, (req, res) => res.status(201).json(sales.createSale(req.body || {}, { elevated: req.elevated })));
-  r.get('/sales', scoped, (req, res) => res.json(sales.listSales(req.query)));
-  r.get('/sales/export.csv', owner, (req, res) => {
+  r.get('/sales', ownerOrKey, (req, res) => res.json(sales.listSales(req.query)));
+  r.get('/sales/export.csv', ownerRead, (req, res) => {
     const rows = sales.listSales({ ...req.query, limit: 1000 });
     res.type('text/csv').attachment('sales.csv').send(toCsv(rows, [
       { label: 'invoice_no', get: (s) => s.invoice_no }, { label: 'date', get: (s) => s.created_at }, { label: 'bs_date', get: (s) => s.bs_date },
@@ -113,10 +128,10 @@ export function apiRouter() {
   });
   r.get('/sales/:id', scoped, (req, res) => res.json(sales.getSale(req.params.id)));
   r.post('/sales/:id/void', pin, (req, res) => res.json(sales.voidSale(req.params.id, req.body?.reason)));
-  r.post('/sales/:id/ird-sync', owner, async (req, res) => res.json(await ird.syncSale(Number(req.params.id))));
+  r.post('/sales/:id/ird-sync', ownerOnly, async (req, res) => res.json(await ird.syncSale(Number(req.params.id))));
 
   r.post('/sales/:id/postpone', scoped, (req, res) => res.json(sales.postponeSale(Number(req.params.id), req.body || {})));
-  r.get('/outstanding', scoped, (req, res) => res.json(sales.outstanding()));
+  r.get('/outstanding', ownerOrKey, (req, res) => res.json(sales.outstanding()));
   r.post('/sales/:id/refunds', pin, (req, res) => res.status(201).json(refunds.createRefund(Number(req.params.id), req.body || {})));
 
   // ---------- customers & loyalty ----------
@@ -136,19 +151,19 @@ export function apiRouter() {
     memberships.activate(Number(req.params.id), req.body?.planId, { via: 'comp' });
     res.json(customers.getCustomer(req.params.id));
   });
-  r.put('/customers/:id/tier', pin, (req, res) => { memberships.setTier(Number(req.params.id), req.body?.planId); res.json(customers.getCustomer(req.params.id)); });
+  r.put('/customers/:id/tier', ownerOnly, (req, res) => { memberships.setTier(Number(req.params.id), req.body?.planId); res.json(customers.getCustomer(req.params.id)); });
   r.delete('/customers/:id/membership', pin, (req, res) => { memberships.cancelMembership(req.params.id); res.json(customers.getCustomer(req.params.id)); });
 
   // ---------- membership plans ----------
-  r.get('/membership-plans', scoped, (req, res) => res.json({ plans: memberships.listPlans({ all: req.query.all === '1' }), stats: memberships.planStats() }));
-  r.post('/membership-plans', pin, (req, res) => res.status(201).json(memberships.createPlan(req.body || {})));
-  r.put('/membership-plans/:id', pin, (req, res) => res.json(memberships.updatePlan(req.params.id, req.body || {})));
-  r.delete('/membership-plans/:id', pin, (req, res) => res.json(memberships.deletePlan(req.params.id)));
+  r.get('/membership-plans', ownerOrKey, (req, res) => res.json({ plans: memberships.listPlans({ all: req.query.all === '1' }), stats: memberships.planStats() }));
+  r.post('/membership-plans', ownerOnly, (req, res) => res.status(201).json(memberships.createPlan(req.body || {})));
+  r.put('/membership-plans/:id', ownerOnly, (req, res) => res.json(memberships.updatePlan(req.params.id, req.body || {})));
+  r.delete('/membership-plans/:id', ownerOnly, (req, res) => res.json(memberships.deletePlan(req.params.id)));
 
   // ---------- shifts & cash drawer ----------
   r.get('/shifts/current', owner, (req, res) => { const s = shifts.currentShift(); res.json(s ? { shift: s, report: shifts.report(s.id) } : { shift: null }); });
-  r.get('/shifts', owner, (req, res) => res.json(shifts.listShifts(req.query.limit)));
-  r.get('/shifts/:id', owner, (req, res) => res.json({ shift: shifts.getShift(req.params.id), report: shifts.report(Number(req.params.id)) }));
+  r.get('/shifts', ownerRead, (req, res) => res.json(shifts.listShifts(req.query.limit)));
+  r.get('/shifts/:id', ownerRead, (req, res) => res.json({ shift: shifts.getShift(req.params.id), report: shifts.report(Number(req.params.id)) }));
   r.post('/shifts/open', owner, (req, res) => res.status(201).json(shifts.openShift(req.body || {})));
   r.post('/shifts/cash', owner, (req, res) => res.json(shifts.cashMovement(req.body || {})));
   r.post('/shifts/close', owner, (req, res) => res.json(shifts.closeShift(req.body || {})));
@@ -162,13 +177,13 @@ export function apiRouter() {
   r.post('/payments/:id/cancel', owner, (req, res) => res.json(payments.cancelPayment(req.params.id)));
 
   // ---------- overview ----------
-  r.get('/overview', scoped, (req, res) => res.json(overview.overview({ period: req.query.period || 'month', offset: Math.max(-400, Math.min(0, Number(req.query.offset) || 0)) })));
-  r.get('/overview/day', scoped, (req, res) => res.json(overview.daySummary()));
+  r.get('/overview', ownerOrKey, (req, res) => res.json(overview.overview({ period: req.query.period || 'month', offset: Math.max(-400, Math.min(0, Number(req.query.offset) || 0)) })));
+  r.get('/overview/day', ownerOrKey, (req, res) => res.json(overview.daySummary()));
 
   // ---------- settings & connectors ----------
-  r.get('/settings', owner, (req, res) => res.json(settings.publicSettings()));
+  r.get('/settings', ownerRead, (req, res) => res.json(settings.publicSettings()));
   // Appearance is personal, not a business rule: no PIN needed.
-  r.put('/settings/ui', owner, (req, res) => {
+  r.put('/settings/ui', ownerRead, (req, res) => {
     const v = req.body?.values || {};
     if (v.theme !== undefined && !themes.isValidTheme(v.theme)) throw badRequest('Unknown theme');
     const theme = String(v.theme ?? '');
@@ -179,10 +194,10 @@ export function apiRouter() {
     settings.setGroup('ui', patch);
     res.json(settings.publicGroup('ui'));
   });
-  r.get('/themes', owner, (req, res) => res.json({ builtIn: themes.BUILT_IN, custom: themes.listThemes() }));
-  r.post('/themes', owner, (req, res) => res.status(201).json(themes.createTheme(req.body || {})));
-  r.put('/themes/:id', owner, (req, res) => res.json(themes.updateTheme(req.params.id, req.body || {})));
-  r.delete('/themes/:id', owner, (req, res) => {
+  r.get('/themes', ownerRead, (req, res) => res.json({ builtIn: themes.BUILT_IN, custom: themes.listThemes() }));
+  r.post('/themes', ownerRead, (req, res) => res.status(201).json(themes.createTheme(req.body || {})));
+  r.put('/themes/:id', ownerRead, (req, res) => res.json(themes.updateTheme(req.params.id, req.body || {})));
+  r.delete('/themes/:id', ownerRead, (req, res) => {
     if (settings.getGroup('ui').theme === `custom:${Number(req.params.id)}`) settings.setGroup('ui', { theme: 'system' });
     res.json(themes.deleteTheme(req.params.id));
   });
@@ -190,12 +205,12 @@ export function apiRouter() {
     const img = themes.getThemeImage(req.params.id);
     res.set({ 'Content-Type': img.type, 'Cache-Control': 'private, max-age=86400' }).send(img.data);
   });
-  r.put('/settings/:group', pin, (req, res) => {
+  r.put('/settings/:group', ownerOnly, (req, res) => {
     const { group } = req.params;
     if (!(group in settings.DEFAULTS)) throw badRequest('Unknown settings group');
     let values = req.body?.values || {};
     // The PIN itself only changes through /auth/pin (which checks the current PIN).
-    if (group === 'security') values = { lockScreen: values.lockScreen, elevateMinutes: values.elevateMinutes };
+    if (group === 'security') values = { lockScreen: values.lockScreen, elevateMinutes: values.elevateMinutes, ownerIdleMinutes: values.ownerIdleMinutes };
     // Images are stored on this PC only (data URLs). External image links would make the browser
     // contact third-party servers and reveal this PC's IP and browser details.
     for (const f of ['logoUrl', 'imageUrl']) {
@@ -208,7 +223,7 @@ export function apiRouter() {
     res.json(settings.publicGroup(group));
   });
 
-  r.post('/connectors/:name/test', owner, async (req, res) => {
+  r.post('/connectors/:name/test', ownerRead, async (req, res) => {
     const n = req.params.name;
     if (n === 'ai') return res.json(await ai.testKey());
     if (n === 'telegram') { await sendTelegram('🔔 Test from your POS — notifications are working.'); return res.json({ ok: true }); }
@@ -229,41 +244,41 @@ export function apiRouter() {
     }
     throw badRequest('Unknown connector');
   });
-  r.post('/connectors/genericWebhook/rotate', pin, (req, res) => {
+  r.post('/connectors/genericWebhook/rotate', ownerOnly, (req, res) => {
     const secret = `whsec_${randomToken(24)}`;
     settings.setGroup('genericWebhook', { secret });
     res.json({ secret });
   });
 
-  r.get('/keys', owner, (req, res) => res.json(apikeys.listKeys()));
-  r.post('/keys', pin, (req, res) => res.status(201).json(apikeys.createKey(req.body || {})));
-  r.delete('/keys/:id', pin, (req, res) => res.json(apikeys.revokeKey(req.params.id)));
+  r.get('/keys', ownerRead, (req, res) => res.json(apikeys.listKeys()));
+  r.post('/keys', ownerOnly, (req, res) => res.status(201).json(apikeys.createKey(req.body || {})));
+  r.delete('/keys/:id', ownerOnly, (req, res) => res.json(apikeys.revokeKey(req.params.id)));
 
-  r.get('/webhooks-out', owner, (req, res) => res.json({ hooks: hooks.listHooks(), events: hooks.EVENTS }));
-  r.post('/webhooks-out', pin, (req, res) => res.status(201).json(hooks.createHook(req.body || {})));
-  r.delete('/webhooks-out/:id', pin, (req, res) => res.json(hooks.deleteHook(req.params.id)));
+  r.get('/webhooks-out', ownerRead, (req, res) => res.json({ hooks: hooks.listHooks(), events: hooks.EVENTS }));
+  r.post('/webhooks-out', ownerOnly, (req, res) => res.status(201).json(hooks.createHook(req.body || {})));
+  r.delete('/webhooks-out/:id', ownerOnly, (req, res) => res.json(hooks.deleteHook(req.params.id)));
 
   // ---------- extensions & AI ----------
-  r.get('/extensions', owner, (req, res) => res.json(exts.listExtensions()));
-  r.post('/extensions', pin, (req, res) => res.status(201).json(exts.createExtension(req.body || {})));
-  r.put('/extensions/:id', pin, (req, res) => res.json(exts.updateExtension(req.params.id, req.body || {})));
-  r.delete('/extensions/:id', pin, (req, res) => res.json(exts.deleteExtension(req.params.id)));
-  r.get('/extensions-api', owner, (req, res) => res.json({ doc: ai.EXTENSION_API_DOC }));
-  r.post('/ai/chat', owner, async (req, res) => res.json(await ai.chat(req.body?.messages)));
-  r.post('/ai/extension', pin, async (req, res) => res.json(await ai.buildExtension(req.body?.description)));
+  r.get('/extensions', ownerRead, (req, res) => res.json(exts.listExtensions()));
+  r.post('/extensions', ownerOnly, (req, res) => res.status(201).json(exts.createExtension(req.body || {})));
+  r.put('/extensions/:id', ownerOnly, (req, res) => res.json(exts.updateExtension(req.params.id, req.body || {})));
+  r.delete('/extensions/:id', ownerOnly, (req, res) => res.json(exts.deleteExtension(req.params.id)));
+  r.get('/extensions-api', ownerRead, (req, res) => res.json({ doc: ai.EXTENSION_API_DOC }));
+  r.post('/ai/chat', ownerRead, async (req, res) => res.json(await ai.chat(req.body?.messages)));
+  r.post('/ai/extension', ownerOnly, async (req, res) => res.json(await ai.buildExtension(req.body?.description)));
 
   // ---------- Google Calendar ----------
-  r.get('/google/status', owner, (req, res) => res.json({ connected: calendar.isConnected(), redirectUri: calendar.redirectUri(baseUrl(req)) }));
-  r.get('/google/connect', pin, (req, res) => res.redirect(calendar.authUrl(baseUrl(req))));
-  r.get('/google/callback', owner, async (req, res) => {
+  r.get('/google/status', ownerRead, (req, res) => res.json({ connected: calendar.isConnected(), redirectUri: calendar.redirectUri(baseUrl(req)) }));
+  r.get('/google/connect', ownerOnly, (req, res) => res.redirect(calendar.authUrl(baseUrl(req))));
+  r.get('/google/callback', ownerRead, async (req, res) => {
     if (req.query.error) return res.redirect('/#/connectors?google=denied');
     await calendar.handleCallback(baseUrl(req), req.query);
     res.redirect('/#/connectors?google=connected');
   });
-  r.post('/google/disconnect', pin, (req, res) => { calendar.disconnect(); res.json({ ok: true }); });
-  r.get('/google/events', owner, async (req, res) => res.json(await calendar.upcoming(Number(req.query.days) || 14)));
-  r.post('/google/events', owner, async (req, res) => res.status(201).json(await calendar.createEvent(req.body || {})));
-  r.post('/google/day-summary', owner, async (req, res) => {
+  r.post('/google/disconnect', ownerOnly, (req, res) => { calendar.disconnect(); res.json({ ok: true }); });
+  r.get('/google/events', ownerRead, async (req, res) => res.json(await calendar.upcoming(Number(req.query.days) || 14)));
+  r.post('/google/events', ownerRead, async (req, res) => res.status(201).json(await calendar.createEvent(req.body || {})));
+  r.post('/google/day-summary', ownerRead, async (req, res) => {
     const d = overview.daySummary();
     const sym = settings.getGroup('business').currencySymbol;
     const money = (v) => `${sym} ${toMajor(v).toFixed(2)}`;
@@ -275,7 +290,7 @@ export function apiRouter() {
   });
 
   // ---------- privacy ----------
-  r.get('/privacy/egress', owner, (req, res) => res.json({ offline: settings.getGroup('privacy').offline, allowed: allowedDestinations(), ...egressActivity() }));
+  r.get('/privacy/egress', ownerRead, (req, res) => res.json({ offline: settings.getGroup('privacy').offline, allowed: allowedDestinations(), ...egressActivity() }));
 
   // ---------- integrity & audit ----------
   r.get('/integrity', owner, (req, res) => {
@@ -284,7 +299,7 @@ export function apiRouter() {
     res.json({ ...data, ok: data.ok && code.ok, code: { sealed: code.sealed, ok: code.ok, changed: code.changed.length + code.added.length + code.missing.length },
       problems: [...data.problems, ...(code.ok ? [] : [{ kind: 'code', ref: '', reason: `${code.changed.length + code.added.length + code.missing.length} application file(s) differ from the sealed release` }])] });
   });
-  r.get('/audit', owner, (req, res) => res.json(ledgerRecent({ limit: req.query.limit, kind: req.query.kind })));
+  r.get('/audit', ownerRead, (req, res) => res.json(ledgerRecent({ limit: req.query.limit, kind: req.query.kind })));
 
   // ---------- utilities ----------
   r.get('/qr.svg', owner, async (req, res) => {
@@ -292,7 +307,7 @@ export function apiRouter() {
     if (!text || text.length > 1500) throw badRequest('text required (max 1500 chars)');
     res.type('image/svg+xml').send(await QRCode.toString(text, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }));
   });
-  r.get('/backup.db', pin, (req, res) => {
+  r.get('/backup.db', ownerOnly, (req, res) => {
     const file = path.join(os.tmpdir(), `pos-backup-${Date.now()}.db`);
     db.exec(`VACUUM INTO '${file.replace(/'/g, "''")}'`);
     res.download(file, `pos-backup-${new Date().toISOString().slice(0, 10)}.db`, () => fs.rm(file, { force: true }, () => {}));

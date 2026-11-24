@@ -12,7 +12,7 @@ export const DEFAULTS = {
   },
   tax: { rate: 13, inclusive: false, serviceChargeRate: 0, label: 'VAT' },
   // Owner PIN is mandatory (set on first run). lockScreen also requires it to open the dashboard.
-  security: { pinHash: '', lockScreen: false, elevateMinutes: 10 },
+  security: { pinHash: '', lockScreen: false, elevateMinutes: 10, ownerUser: '', ownerPassHash: '', ownerKeyHash: '', ownerIdleMinutes: 30 },
   ui: { theme: 'system', sound: true, compactGrid: false },
   esewa: { enabled: false, sandbox: true, productCode: 'EPAYTEST', secretKey: '' },
   khalti: { enabled: false, sandbox: true, secretKey: '' },
@@ -46,7 +46,7 @@ export const SECRET_FIELDS = {
   google: ['clientSecret', 'refreshToken'],
   ai: ['apiKey'],
   telegram: ['botToken'],
-  security: ['pinHash'],
+  security: ['pinHash', 'ownerPassHash', 'ownerKeyHash'],
 };
 
 const getStmt = db.prepare('SELECT value FROM settings WHERE key = ?');
@@ -116,4 +116,22 @@ export function nextSequence(name) {
   const n = (row ? Number(row.value) : 0) + 1;
   putStmt.run(key, String(n));
   return n;
+}
+
+/** What the till (selling screen) needs — no connector configuration, no owner details. */
+export function tillSettings() {
+  const b = getGroup('business');
+  const sec = getGroup('security');
+  return {
+    business: { name: b.name, currency: b.currency, currencySymbol: b.currencySymbol, locale: b.locale, calendar: b.calendar, publicUrl: b.publicUrl, logoUrl: b.logoUrl, receiptFooter: b.receiptFooter, language: b.language },
+    tax: getGroup('tax'),
+    checkout: getGroup('checkout'),
+    loyalty: getGroup('loyalty'),
+    shifts: getGroup('shifts'),
+    memberships: getGroup('memberships'),
+    ui: getGroup('ui'),
+    ird: { enabled: getGroup('ird').enabled, dryRun: getGroup('ird').dryRun },
+    security: { pinHashSet: !!sec.pinHash, lockScreen: sec.lockScreen, ownerExists: !!sec.ownerUser },
+    printer: (() => { try { const p = getGroup('printer'); return { mode: p.mode, autoPrint: p.autoPrint, openDrawer: p.openDrawer }; } catch { return {}; } })(),
+  };
 }
