@@ -2,7 +2,7 @@
 import { h, icon, toast, errorToast, modal, field, badge, confirmDialog, formValues, money, toMajor, debounce, empty, imageInput } from '../ui.js';
 import { get, put, post, del } from '../api.js';
 import { getState, dispatch } from '../store.js';
-import { loadedExtensions } from '../extensions.js';
+import { loadedExtensions, reloadExtensions } from '../extensions.js';
 import { showOwnerKey, ownerSignOut } from '../owner.js';
 import { applyTheme, THEMES, VAR_KEYS, paletteFromImage, paletteFromHue, prepareImage, setImageVars, contrast } from '../theme.js';
 
@@ -149,7 +149,7 @@ function extensionsCard() {
       h('div', h('b', x.name), x.description ? h('small.muted', ` — ${x.description}`) : null,
         status.get(x.id)?.error ? h('div.danger-text', `Load error: ${status.get(x.id).error}`) : null),
       h('div.row-actions',
-        h('label.toggle', h('input', { type: 'checkbox', checked: x.enabled, onchange: async (e) => { await put(`/api/extensions/${x.id}`, { enabled: e.target.checked }); toast('Reload the page to apply', 'info'); } }), h('span.track'), h('span', x.enabled ? 'On' : 'Off')),
+        h('label.toggle', h('input', { type: 'checkbox', checked: x.enabled, onchange: async (e) => { try { await put(`/api/extensions/${x.id}`, { enabled: e.target.checked }); await applyExtensions(); toast(e.target.checked ? `${x.name} is on` : `${x.name} is off`, 'success'); load(); } catch (err) { errorToast(err); } } }), h('span.track'), h('span', x.enabled ? 'On' : 'Off')),
         h('button.icon-btn', { title: 'Edit', 'aria-label': `Edit ${x.name}`, onclick: () => editor(x, load) }, icon('edit', 16)),
         h('button.icon-btn', { title: 'Delete', 'aria-label': `Delete ${x.name}`, onclick: async () => { if (await confirmDialog(`Delete extension "${x.name}"?`, { danger: true, okLabel: 'Delete' })) { await del(`/api/extensions/${x.id}`); load(); } } }, icon('trash', 16))))) : [h('li.muted', 'No extensions yet. Write one or let AI draft it from a description.')]));
   };
@@ -192,7 +192,8 @@ async function editor(ext, done) {
 
         const body = { name: name.value, description: description.value, code: code.value, enabled: enabled.checked };
         ext?.id ? await put(`/api/extensions/${ext.id}`, body) : await post('/api/extensions', body);
-        toast('Extension saved — reload to apply', 'success'); c(); done();
+        await applyExtensions();
+        toast('Extension saved and applied', 'success'); c(); done();
       } catch (e) { errorToast(e); }
     } }],
   });
@@ -635,4 +636,10 @@ function sealControls() {
   };
   draw().catch(errorToast);
   return box;
+}
+
+async function applyExtensions() {
+  const boot = await get('/api/bootstrap');
+  dispatch({ type: 'boot', boot });
+  await reloadExtensions(boot.extensions);
 }

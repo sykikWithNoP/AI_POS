@@ -73,9 +73,20 @@ async function onMessage(e) {
   }
 }
 
+let listening = false;
+/** Tear down the sandbox and load the current list again (used after toggling/saving extensions). */
+export async function reloadExtensions(list) {
+  frame?.remove(); frame = null;
+  buttons.splice(0); loaded.splice(0); pending.clear();
+  rulesCache = { sig: '', discounts: [] };
+  await loadExtensions(list);
+  onRulesChanged();
+  window.dispatchEvent(new CustomEvent('pos:extensions-reloaded'));
+}
+
 export async function loadExtensions(list) {
   if (!list.length) return;
-  window.addEventListener('message', onMessage);
+  if (!listening) { window.addEventListener('message', onMessage); listening = true; }
   frame = document.createElement('iframe');
   frame.setAttribute('sandbox', 'allow-scripts'); // no allow-same-origin: opaque origin
   frame.setAttribute('aria-hidden', 'true');

@@ -136,6 +136,8 @@ function renderSell(root) {
 
   drawChips(); drawGrid(); drawExtButtons(); drawTabs(); drawCart(cartBox);
   onRulesUpdate(() => { if (cartBox.isConnected) drawCart(cartBox); });
+  const onExtReload = () => drawExtButtons();
+  window.addEventListener('pos:extensions-reloaded', onExtReload);
   const unsub = subscribe((st, prev) => {
     if (st.cart !== prev.cart) drawCart(cartBox);
     if (st.sessions !== prev.sessions || st.active !== prev.active) drawTabs();
@@ -154,7 +156,7 @@ function renderSell(root) {
     toast(`Unknown barcode ${code}`, 'warn', 6000);
   });
   setTimeout(() => search.focus(), 0);
-  return () => { unsub(); offScan(); document.removeEventListener('keydown', onKey); };
+  return () => { unsub(); offScan(); document.removeEventListener('keydown', onKey); window.removeEventListener('pos:extensions-reloaded', onExtReload); };
 }
 
 async function closeSession(x) {

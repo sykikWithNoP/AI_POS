@@ -10,7 +10,7 @@ npm install
 npm start
 ```
 
-Then open http://localhost:4321 and create your owner PIN. Data lives in `./data` (SQLite + the key that encrypts your saved secrets and signs the ledger).
+Then open http://localhost:4321. The first-run screen creates the **till PIN** and the **owner account** (username, password and a generated **Owner Key** — save it). `npm start` runs the POS through a small launcher that restarts it when a restore or update needs it. Data lives in `./data` (SQLite + the key that encrypts your saved secrets and signs the ledger).
 
 Requires Node.js 22.5 or newer (it uses the built-in `node:sqlite`, so there are no native modules to compile).
 
@@ -22,8 +22,10 @@ Requires Node.js 22.5 or newer (it uses the built-in `node:sqlite`, so there are
 - **Sell screen**: items grid in the top-left, member/customer search in the top-right above the bill, and an action bar in the bottom-left (★ Membership, Custom item, Discount, Cash drawer).
 - **Multiple open bills (sessions)**: tabs above the bill. Click **+ New** to start another bill while one is open, and double-click a tab to rename it (e.g. "Table 4").
 - **Instant totals**: the browser and the server use the same billing engine (`shared/billing.js`), working in integer paisa. It handles VAT inclusive/exclusive, exempt items, service charge, line and bill discounts, member pricing, points redemption and extension discount rules.
-- **Barcode/SKU scan** into the search box, then Enter. Shortcuts: F2 search, F3 member search, F9 charge.
-- **Items tab**: add, change and delete items, plus CSV import/export, stock, cost price, per-item tax and tile colour/emoji.
+- **Barcode scanners** (USB/Bluetooth) work anywhere on the sell screen — no need to click the search box — and the camera button scans with a webcam (Chrome/Edge). Shortcuts: F2 search, F3 member search, F9 charge.
+- **Variants & add-ons**: option groups per item (e.g. Size: Small −20 / Large +40, Extras: Cheese +30). The server prices every choice itself.
+- **Items tab**: add, change and delete items, CSV import/export, cost price, per-item tax, tile colour/emoji, **Stock in** (goods received with supplier, bill no. and cost), **Adjust** (counted stock with a reason, needs the PIN) and a full **stock history** (opening, received, sold, returned, voided, adjusted).
+- **Receipts**: browser print in 80/58 mm, or straight to an ESC/POS receipt printer; the cash drawer opens on cash sales.
 - **Customers tab**: profiles, visit history, loyalty points and memberships.
 - **Checkout**: cash with quick-tender buttons and change, card terminal, Fonepay/bank QR, eSewa, Khalti, Stripe. Split payments are supported.
 - **Pay later** (turn on in Settings → Checkout): issues the bill now with a due date. Stock goes out immediately, the payment is collected later, and the bill is tracked as outstanding or overdue.
@@ -48,6 +50,27 @@ Requires Node.js 22.5 or newer (it uses the built-in `node:sqlite`, so there are
 ### Overview
 - Strip with **Today / This month / This year** at a glance, then a detailed view of each (with ← → to go back in time). Months and years can be AD or Bikram Sambat (Settings → Business).
 - Net revenue after refunds vs the previous period, bills, average bill, VAT, estimated gross profit, pay-later outstanding/overdue, a revenue chart (hour/day/month), payment mix, top items, busy hours, stock alerts, IRD status, Google Calendar events, and a searchable bill list with void, refund, collect, print and copy-link actions. CSV export.
+
+### Reports & IRD (Overview → Reports / IRD)
+- **Sales register** in the IRD sales-book layout (miti, bill/credit-note no., buyer, buyer PAN, total, exempt, taxable, VAT), with credit notes and cancelled bills; **VAT summary** month by month for the fiscal year; **profit by item** (using the cost at the time of each sale); **slow-moving stock**; **top customers**; **stock movements**. CSV export and print.
+- **IRD made easy:** a readiness checklist and a 3-step setup wizard (business PAN → CBMS login → practice mode or go live). Failed or pending bills **retry automatically** (after 1, 5, 15, 60 minutes, then every few hours), credit notes included, and **Sync everything now** sends the rest.
+- **Filing pack**: one ZIP to attach to your return — sales register (CSV + printable HTML), VAT summary, credit notes, and any bills IRD hasn't accepted yet.
+
+### Moving from another system (Settings)
+Import **items, customers, opening stock and past sales** from your old POS or spreadsheet (CSV, TSV, semicolon or JSON). Columns are matched automatically (editable), a **dry run** shows exactly what would happen with per-row problems, and the real import runs all-or-nothing. Past sales become signed **history** (`IMP-` numbers): they show in Overview and reports but are never sent to IRD and never use your new invoice numbers; importing the same file twice skips what's already there.
+
+### AI copilot (owner area)
+Bring your own Anthropic key. The copilot looks things up by itself (sales, reports, items, customers, bills, IRD status, stock) and **prepares work** — but anything that changes data comes back as a **proposal card you approve or reject**. Attach a **supplier bill photo or PDF** and it drafts the stock-in (creating missing items first); attach an **export from your old system** and it maps the columns, dry-runs the import and proposes it; ask for the **IRD filing pack** and it gives you the download. Approved actions run through the same rules as the screens and are recorded in the ledger. The tool loop runs on your PC; only the conversation and attachments go to the AI service (through the privacy gate).
+
+### Devices (Connectors → Devices)
+- **Receipt printer**: network ESC/POS printers on your **local network only** (IP + port 9100), or the computer's printer queue for USB printers (macOS/Linux `lp`, Windows shared printer). Auto-print after each sale, copies, e-bill QR. Test print button.
+- **Cash drawer** (through the printer): opens on cash sales; opening it with no sale needs the PIN and is logged.
+- **Barcode scanner**: tuning (barcode length, keystroke speed), beep, and a test box.
+
+### Backups & updates (Settings)
+- **Automatic backups** on a schedule (default daily, keep 14), plus before every restore and update; download any backup.
+- **Restore** from the list or from a file: it is checked first (must be an intact POS database), your current data is kept as a backup, and it's applied on restart.
+- **Updates** install from a signed **`.posupdate`** file — nothing is downloaded from the internet. Only packages signed with **your** key are accepted, every file is fingerprint-checked, your data is backed up first, the previous version is kept, a version that fails to start three times is **rolled back automatically**, and you can roll back by hand. The database only ever gains columns, so every older backup and version stays readable.
 
 ### Themes
 Settings → Appearance has **15 built-in themes**:
@@ -87,14 +110,11 @@ browser ──HTTP──▶ server/http (routes, pages)   thin: parse input, cal
 
 **Local only.** The server always binds to `127.0.0.1`. There is no LAN mode. Every request must come from this computer *and* name `localhost`/`127.0.0.1`. If you run a tunnel for e-bills and payment webhooks, the tunnel's domain reaches only `/b/…`, `/pay/…` and `/api/webhooks/…`, never the dashboard or API.
 
-**Owner PIN** (created on first run; there are no staff logins). Selling never asks for it. These always need it re-entered (valid for a few minutes):
-- changing prices, items, tax and any other setting, membership tiers, customer tiers or points
-- voids and refunds
-- API keys, webhooks, extensions, Google connect
-- backups
-- discounts above the limit you set (Settings → Checkout)
+**Owner sign-in for Overview, Settings and Connectors.** These areas (and reports, the AI copilot, keys, backups and updates) need **username + password + Owner Key**. The password and key are stored only as scrypt hashes; the owner area signs out after 30 idle minutes; five failures lock it with growing delays, and the error never says which part was wrong. Recovery: reset the password with the Owner Key + PIN; replace the Owner Key with the password + PIN; lost both → run `npm run reset-owner` (or `node server.mjs --reset-owner`) **on the PC itself**, which keeps all data.
 
-Five wrong PINs lock it out with growing delays, and every attempt is logged. API keys can never perform protected actions. The PIN can be changed but not removed.
+**Till PIN** (no staff logins). Selling never asks for it. At the till it approves: changing or deleting items, stock adjustments, voids and refunds, customer points, opening the drawer with no sale, and discounts above the limit you set (Settings → Checkout). Five wrong PINs lock it out with growing delays, and every attempt is logged. API keys can never perform protected actions. The PIN can be changed but not removed.
+
+**Optional: PIN at every start** (Settings → Security). Seals the master key with the PIN and the Owner Key; after every restart the POS stays locked until one of them is entered, so a copied `data` folder reveals nothing.
 
 **Rules enforced on the server, not the screen.** The server re-prices every catalog item, recomputes every total, and checks the discount limit. Nothing done in the browser, the console or an extension can change what a bill charges.
 
@@ -132,7 +152,11 @@ Five wrong PINs lock it out with growing delays, and every attempt is logged. AP
 npm run build
 ```
 
-This writes `dist/`: a single minified server bundle (`server.mjs`, all dependencies included), a minified UI, no source maps, a proprietary notice, and a sealed `integrity.json`. Copy only the `dist` folder to the shop PC and start it with `npm start` inside it (Node 22.5+). If any shipped file is modified, the release refuses to start (exit code 78). During development, `npm run seal` records the current files and `POS_STRICT_INTEGRITY=1` turns on the same check.
+This writes `dist/`: a single minified server bundle (`server.mjs`, all dependencies included), the launcher, a minified UI, no source maps, a proprietary notice, and a sealed `integrity.json`. Copy only the `dist` folder to the shop PC and start it with `npm start` inside it (Node 22.5+). If any shipped file is modified, the release refuses to start (exit code 78). During development, `npm run seal` records the current files and `POS_STRICT_INTEGRITY=1` turns on the same check.
+
+**Shipping updates (once):** run `npm run keygen`. It creates your private signing key at `~/.free-ai-pos/update-signing.pem` (back it up offline, never commit it) and writes the public key to `server/security/update-public.pem` (commit this; it's built into every release).
+
+**Each new version:** raise `version` in `package.json`, then `npm run build`. Besides `dist/`, it writes `updates/free-ai-pos-<version>.posupdate`, signed with your key (optionally with `POS_RELEASE_NOTES="…"`). Install it on the shop PC from Settings → Updates.
 
 **What this cannot do:** someone with administrator access to the PC can still read and change anything on it; minified JavaScript can still be studied with enough effort. The protections above make every rule server-enforced, make tampering visible, and make extraction unrewarding. Keep the source repository private, and use full-disk encryption plus a PC login password for the strongest setup.
 
@@ -142,9 +166,11 @@ This writes `dist/`: a single minified server bundle (`server.mjs`, all dependen
 npm test
 ```
 
-The tests cover the billing maths, BS dates/fiscal years, item CRUD, CSRF, server-side pricing, split payments, webhook signatures and idempotency, API-key scopes, secret masking, e-bills, IRD dry-run, memberships, loyalty, refunds, shifts and pay-later. Security tests cover local-only access, PIN step-up and lockout, the discount limit, database triggers, ledger tamper detection, the AI prompt guard, the extension scanner and the sandbox CSP.
+The tests cover the billing maths, BS dates/fiscal years, item CRUD, CSRF, server-side pricing, split payments, webhook signatures and idempotency, API-key scopes, secret masking, e-bills, IRD dry-run, memberships, loyalty, refunds, shifts, pay-later, stock movements, variants, reports, the IRD retry queue and filing pack, backups/restore, update signing and rollback, receipt printing, migration and the AI agent's approval flow (with a stand-in model). Security tests cover local-only access, owner sign-in and recovery, PIN step-up and lockout, the discount limit, database triggers, ledger tamper detection, the sealed key, the AI prompt guard, the extension scanner and the sandbox CSP.
 
 ## Notes & limits
 - The IRD CBMS field mapping follows the published CBMS JSON format. Keep **dry-run on** until you've confirmed it with IRD for your PAN.
 - eSewa/Khalti/Stripe flows follow each provider's documented API but haven't been exercised against live accounts here. Run a small sandbox sale end to end before going live.
-- Not included by design: staff accounts, gift cards. Not yet included: item variants/modifiers, multi-location, kitchen display/table maps, thermal (ESC/POS) printer drivers.
+- Receipt printing was tested against a simulated network printer; check your printer model with **Test print** (most ESC/POS printers can't print Devanagari, so receipts use plain characters).
+- Camera scanning needs a browser with BarcodeDetector (Chrome/Edge).
+- Not included by design: staff accounts, gift cards, a Nepali-language interface. Not yet included: multi-location, kitchen display/table maps.
