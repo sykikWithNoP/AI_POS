@@ -89,6 +89,8 @@ eSewa · Khalti · Stripe · Fonepay/Bank QR · Card terminal · Payment notific
 ### Build your own features
 **Settings → Extensions** runs small JavaScript plugins, sandboxed (see below), with a documented `pos` API: discount rules, toolbar buttons, checkout checks, custom items, and reactions to sales and payments. You can also describe a feature in plain words and the AI Copilot drafts the extension (using your Anthropic key). The draft opens **disabled** so you can read it first.
 
+> **Not technical?** Read the [plain-language user guide](USER-GUIDE.md).
+
 ## Navigation map
 
 Every screen has its own address, `#/<page>/<section>`, so bookmarks and the browser's back/forward buttons work. The sidebar holds the four pages; each page has the same header with its sections as tabs. Owner pages ask for the owner sign-in first.
