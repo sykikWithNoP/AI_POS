@@ -110,7 +110,7 @@ export function startBackupSchedule() {
 
 // ---------- copies off this computer (USB stick, external disk, synced folder) ----------
 
-const OUT_DIR = 'FreeAIPOS-backups';
+const OUT_DIR = 'NINDITOPOS-backups';
 
 /** Drives and folders a backup can be copied to: USB sticks / external disks, best effort per OS. */
 export function listDrives() {

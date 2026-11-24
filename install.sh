@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Free AI POS — setup for macOS and Linux.
+# NINDITO POS — setup for macOS and Linux.
 # The runtime modules are already in this folder; this checks Node.js and gets the build tools if asked.
 #   ./install.sh          check everything is ready
 #   ./install.sh --dev    also install build/test tools (needed for `npm run build`)

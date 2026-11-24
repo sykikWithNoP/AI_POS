@@ -1,4 +1,4 @@
-# Installers — Free AI POS 1.2.0
+# Installers — NINDITO POS 1.2.0
 
 > Personal use only. Commercial use without the copyright holder's written approval is forbidden — see [LICENSE](../LICENSE).
 
@@ -6,17 +6,17 @@ Pick the one for your computer, click it, then click **Download** (the ⤓ butto
 
 | Computer | File | Size |
 |---|---|---|
-| Windows 10 / 11 (64-bit) | [FreeAIPOS-1.2.0-Windows-Setup.exe](FreeAIPOS-1.2.0-Windows-Setup.exe) | 22 MB |
-| Mac with Apple chip (M1–M4) | [FreeAIPOS-1.2.0-macOS-AppleSilicon.dmg](FreeAIPOS-1.2.0-macOS-AppleSilicon.dmg) | 38 MB |
-| Mac with Intel processor | [FreeAIPOS-1.2.0-macOS-Intel.dmg](FreeAIPOS-1.2.0-macOS-Intel.dmg) | 39 MB |
+| Windows 10 / 11 (64-bit) | [NINDITOPOS-1.2.0-Windows-Setup.exe](NINDITOPOS-1.2.0-Windows-Setup.exe) | 22 MB |
+| Mac with Apple chip (M1–M4) | [NINDITOPOS-1.2.0-macOS-AppleSilicon.dmg](NINDITOPOS-1.2.0-macOS-AppleSilicon.dmg) | 37 MB |
+| Mac with Intel processor | [NINDITOPOS-1.2.0-macOS-Intel.dmg](NINDITOPOS-1.2.0-macOS-Intel.dmg) | 38 MB |
 
 Nothing else needs to be installed. Each package includes the official Node.js 22.23.5 runtime (its licence is included) and the protected release build of the POS.
 
 ## What the installers do
 
-**Windows:** installs for the current user only (no administrator rights) into `%LOCALAPPDATA%\Programs\Free AI POS`, adds Start-menu and (optional) desktop shortcuts, optionally starts with Windows, and registers an uninstaller under *Settings › Apps*. Data lives in `%LOCALAPPDATA%\FreeAIPOS\data`; uninstalling asks before deleting it.
+**Windows:** installs for the current user only (no administrator rights) into `%LOCALAPPDATA%\Programs\NINDITO POS`, adds Start-menu and (optional) desktop shortcuts, optionally starts with Windows, and registers an uninstaller under *Settings › Apps*. Data lives in `%LOCALAPPDATA%\NINDITOPOS\data`; uninstalling asks before deleting it.
 
-**Mac:** a normal app to drag into Applications. Data lives in `~/Library/Application Support/Free AI POS`.
+**Mac:** a normal app to drag into Applications. Data lives in `~/Library/Application Support/NINDITO POS`.
 
 Both open the POS in its own window (Edge or Chrome in app mode, otherwise your default browser) at http://localhost:4321. The POS only answers on this computer.
 
@@ -32,9 +32,9 @@ Check that a download is genuine by comparing its SHA-256 with the list below (`
 ## SHA-256
 
 ```
-5a3ad01ad11bdba88047a890ee8fbcf3f0980ebb352e8731ee97e43f04b15aa1 FreeAIPOS-1.2.0-Windows-Setup.exe
-c1e25cd3937f2d22e29aa5314f2b2b84e2ed3da581d88d809bbc5713f85d3179 FreeAIPOS-1.2.0-macOS-AppleSilicon.dmg
-f836bf479df83d93cd31751b5aed8e9619dcab1f7a180ea6822755739d69ce8e FreeAIPOS-1.2.0-macOS-Intel.dmg
+755baf176a806d5ce2e8ce12aa3b1b94f2cb4e22922909d242e3dff0d523db6d NINDITOPOS-1.2.0-Windows-Setup.exe
+8e1461718760ae15360aa0469fac6849129f96025df2dd0226e52c4fcf069585 NINDITOPOS-1.2.0-macOS-AppleSilicon.dmg
+38238a445b30687cb58d80eb268be1ace393d6b734b3ed5701803af8b9aa1a34 NINDITOPOS-1.2.0-macOS-Intel.dmg
 ```
 
 ## Rebuilding (maintainers)

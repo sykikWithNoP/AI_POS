@@ -1,5 +1,5 @@
 @echo off
-rem Free AI POS - setup for Windows.
+rem NINDITO POS - setup for Windows.
 rem The runtime modules are already in this folder; this checks Node.js and gets build tools if asked.
 rem   install.bat         check everything is ready
 rem   install.bat --dev   also install build/test tools (needed for "npm run build")

@@ -23,11 +23,19 @@ function dataDir() {
   if (process.env.DATA_DIR) return process.env.DATA_DIR;
   if (!fs.existsSync(path.join(root, 'installed.json'))) return path.join(root, 'data');
   const home = os.homedir();
-  if (process.platform === 'win32') return path.join(process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local'), 'FreeAIPOS', 'data');
-  if (process.platform === 'darwin') return path.join(home, 'Library', 'Application Support', 'Free AI POS');
-  return path.join(process.env.XDG_DATA_HOME || path.join(home, '.local', 'share'), 'free-ai-pos');
+  if (process.platform === 'win32') return path.join(process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local'), 'NINDITOPOS', 'data');
+  if (process.platform === 'darwin') return path.join(home, 'Library', 'Application Support', 'NINDITO POS');
+  return path.join(process.env.XDG_DATA_HOME || path.join(home, '.local', 'share'), 'nindito-pos');
 }
 const DATA = dataDir();
+// Copies installed before the NINDITO POS name kept their data under the old folder name: move it once.
+{
+  const home = os.homedir();
+  const old = process.platform === 'win32' ? path.join(process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local'), 'FreeAIPOS', 'data')
+    : process.platform === 'darwin' ? path.join(home, 'Library', 'Application Support', 'Free AI POS')
+      : path.join(process.env.XDG_DATA_HOME || path.join(home, '.local', 'share'), 'free-ai-pos');
+  try { if (old !== DATA && fs.existsSync(old) && !fs.existsSync(DATA)) { fs.mkdirSync(path.dirname(DATA), { recursive: true }); fs.renameSync(old, DATA); } } catch { /* keep going with a fresh folder */ }
+}
 
 /** Is our POS answering on the port? (Something else on the port is reported as 'other'.) */
 function probe() {
@@ -82,8 +90,8 @@ function openWindow() {
 function fail(msg) {
   fs.mkdirSync(path.join(DATA, 'logs'), { recursive: true });
   fs.appendFileSync(path.join(DATA, 'logs', 'pos.log'), `${new Date().toISOString()} [desktop] ${msg}\n`);
-  if (process.platform === 'win32') spawn('powershell', ['-NoProfile', '-WindowStyle', 'Hidden', '-Command', `Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('${msg.replace(/'/g, "''")}', 'Free AI POS') | Out-Null`], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
-  else if (process.platform === 'darwin') spawn('osascript', ['-e', `display alert "Free AI POS" message ${JSON.stringify(msg)}`], { detached: true, stdio: 'ignore' }).unref();
+  if (process.platform === 'win32') spawn('powershell', ['-NoProfile', '-WindowStyle', 'Hidden', '-Command', `Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('${msg.replace(/'/g, "''")}', 'NINDITO POS') | Out-Null`], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+  else if (process.platform === 'darwin') spawn('osascript', ['-e', `display alert "NINDITO POS" message ${JSON.stringify(msg)}`], { detached: true, stdio: 'ignore' }).unref();
   else console.error(msg);
   process.exitCode = 1;
 }
@@ -93,13 +101,13 @@ if (process.argv.includes('--reset-owner')) {
   const entry = path.join(root, bundled ? 'server.mjs' : 'server/index.js');
   const r = spawnSync(process.execPath, ['--no-warnings=ExperimentalWarning', entry, '--reset-owner'], { env: { ...process.env, DATA_DIR: DATA }, encoding: 'utf8' });
   const msg = (r.stdout || r.stderr || '').trim() || 'Done.';
-  if (process.platform === 'win32') spawnSync('powershell', ['-NoProfile', '-Command', `Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('${msg.replace(/'/g, "''")}', 'Free AI POS') | Out-Null`], { windowsHide: true });
+  if (process.platform === 'win32') spawnSync('powershell', ['-NoProfile', '-Command', `Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('${msg.replace(/'/g, "''")}', 'NINDITO POS') | Out-Null`], { windowsHide: true });
   else console.log(msg);
   process.exit(r.status ?? 0);
 }
 
 const state = await probe();
-if (state === 'other') fail(`Another program is using port ${PORT}. Close it, or restart the computer, then open Free AI POS again.`);
+if (state === 'other') fail(`Another program is using port ${PORT}. Close it, or restart the computer, then open NINDITO POS again.`);
 else {
   if (state === 'none') {
     startServer();

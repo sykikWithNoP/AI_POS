@@ -8,6 +8,7 @@ import { getSaleByToken } from '../services/sales.js';
 import * as payments from '../services/payments.js';
 import { decodeReturn } from '../providers/esewa.js';
 import { formatMoney } from '../../shared/billing.js';
+import { BRAND } from '../../shared/brand.js';
 import { baseUrl } from './routes.js';
 import path from 'node:path';
 import { config } from '../config.js';
@@ -31,7 +32,7 @@ export function pagesRouter() {
     try { md = fs.readFileSync(path.join(config.root, 'USER-GUIDE.md'), 'utf8'); } catch { /* keep fallback */ }
     res.set('Cache-Control', 'no-cache');
     res.type('html').send(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>User guide — Free AI POS</title><meta name="robots" content="noindex,nofollow,noai,noimageai"><link rel="stylesheet" href="/css/guide.css"></head>
+<title>User guide — NINDITO POS</title><meta name="robots" content="noindex,nofollow,noai,noimageai"><link rel="stylesheet" href="/css/guide.css"></head>
 <body><nav class="top"><a href="/">← Back to the till</a></nav><main class="guide">${renderMarkdown(md)}</main></body></html>`);
   });
 
@@ -92,6 +93,7 @@ export function pagesRouter() {
   <footer>
     <div class="qr">${qr}</div>
     <p>${esc(biz.receiptFooter)}</p>
+    <p class="brand">${BRAND.tagline}</p>
     <button id="print-btn" class="noprint">Print / Save PDF</button>
     <script nonce="${res.locals.nonce}">document.getElementById('print-btn').addEventListener('click',()=>print())</script>
   </footer>

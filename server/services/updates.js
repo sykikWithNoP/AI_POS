@@ -50,7 +50,7 @@ export function verifyPackage(buffer) {
   try { okSig = crypto.verify(null, mBuf, publicKey(), Buffer.from(sig.toString('utf8').trim(), 'base64')); } catch (e) { if (e instanceof HttpError) throw e; }
   if (!okSig) throw badRequest('Signature check failed: this update was not made by you, or it was changed');
   const manifest = JSON.parse(mBuf.toString('utf8'));
-  if (manifest.app !== 'free-ai-pos') throw badRequest('This update is for a different application');
+  if (manifest.app !== 'nindito-pos') throw badRequest('This update is for a different application');
   if (!/^\d+\.\d+\.\d+$/.test(manifest.version)) throw badRequest('Update has an invalid version');
   if (cmp(manifest.version, currentVersion()) <= 0) throw badRequest(`Version ${manifest.version} is not newer than the installed ${currentVersion()}`);
   if (manifest.minFromVersion && cmp(currentVersion(), manifest.minFromVersion) < 0) throw badRequest(`Install ${manifest.minFromVersion} first`);

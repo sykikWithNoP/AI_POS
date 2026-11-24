@@ -139,6 +139,7 @@ export const _forgetKeyForTests = () => { masterKey = undefined; unlockTries.fai
 
 /** Purpose-bound sub-key (e.g. 'ledger') derived from the master key. */
 export function deriveKey(label) {
+  // Internal derivation label from the first release. Never change it: saved keys and the signed ledger depend on it.
   return crypto.createHmac('sha256', key()).update(`free-ai-pos:${label}`).digest();
 }
 

@@ -377,7 +377,7 @@ function systemCard() {
       h('button.btn', { onclick: restartNow }, icon('refresh', 16), 'Restart the POS'),
       h('button.btn.danger', { onclick: async () => {
         if (!(await confirmDialog('Shut down the POS? Open bills are kept. Start it again from the desktop icon.', { okLabel: 'Shut down', danger: true }))) return;
-        try { await post('/api/system/shutdown'); document.body.replaceChildren(h('main.login', h('div.login-card', h('h1', 'The POS is shut down'), h('p', 'Start it again from the Free AI POS icon.')))); } catch (e) { errorToast(e); }
+        try { await post('/api/system/shutdown'); document.body.replaceChildren(h('main.login', h('div.login-card', h('h1', 'The POS is shut down'), h('p', 'Start it again from the NINDITO POS icon.')))); } catch (e) { errorToast(e); }
       } }, 'Shut down the POS')));
 }
 

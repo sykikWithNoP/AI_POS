@@ -67,8 +67,8 @@ export function showOwnerKey(key, username = '') {
   return new Promise((resolve) => {
     const confirm = h('input.input.mono', { placeholder: 'Type the last 5 characters', maxLength: 5, autocomplete: 'off' });
     const download = () => {
-      const blob = new Blob([`Free AI POS — Owner Key\nUsername: ${username}\nCreated: ${new Date().toLocaleString()}\n\n${key}\n\nKeep this file offline (USB stick or printed). Anyone with it AND your password can open the owner areas.\n`], { type: 'text/plain' });
-      const a = h('a', { href: URL.createObjectURL(blob), download: 'free-ai-pos-owner-key.txt' });
+      const blob = new Blob([`NINDITO POS — Owner Key\nUsername: ${username}\nCreated: ${new Date().toLocaleString()}\n\n${key}\n\nKeep this file offline (USB stick or printed). Anyone with it AND your password can open the owner areas.\n`], { type: 'text/plain' });
+      const a = h('a', { href: URL.createObjectURL(blob), download: 'nindito-pos-owner-key.txt' });
       document.body.append(a); a.click(); a.remove();
     };
     let done = false;

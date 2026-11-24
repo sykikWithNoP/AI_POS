@@ -9,14 +9,14 @@ import { HttpError } from '../lib.js';
 import { setGroup } from './settings.js';
 import { append as appendLedger } from '../security/ledger.js';
 
-const LABEL = 'com.freeaipos.app';
+const LABEL = 'com.nindito.pos';
 
 function target() {
   const home = os.homedir();
   const override = process.env.POS_AUTOSTART_DIR; // tests
-  if (process.platform === 'win32') return path.join(override || path.join(process.env.APPDATA || path.join(home, 'AppData', 'Roaming'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup'), 'Free AI POS.vbs');
+  if (process.platform === 'win32') return path.join(override || path.join(process.env.APPDATA || path.join(home, 'AppData', 'Roaming'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup'), 'NINDITO POS.vbs');
   if (process.platform === 'darwin') return path.join(override || path.join(home, 'Library', 'LaunchAgents'), `${LABEL}.plist`);
-  return path.join(override || path.join(home, '.config', 'autostart'), 'free-ai-pos.desktop');
+  return path.join(override || path.join(home, '.config', 'autostart'), 'nindito-pos.desktop');
 }
 
 /** The command that starts the POS in the background (no window). */
@@ -31,7 +31,7 @@ function fileContent() {
   const [node, script, flag] = command();
   if (process.platform === 'win32') {
     const q = (s) => `""${String(s).replace(/"/g, '')}""`;
-    return `' Starts Free AI POS in the background when you sign in to Windows.\r\nCreateObject("WScript.Shell").Run "${q(node)} ${q(script)} ${flag}", 0, False\r\n`;
+    return `' Starts NINDITO POS in the background when you sign in to Windows.\r\nCreateObject("WScript.Shell").Run "${q(node)} ${q(script)} ${flag}", 0, False\r\n`;
   }
   if (process.platform === 'darwin') {
     return `<?xml version="1.0" encoding="UTF-8"?>
@@ -44,7 +44,7 @@ function fileContent() {
 `;
   }
   const qq = (s) => `"${String(s).replace(/(["`$\\])/g, '\\$1')}"`;
-  return `[Desktop Entry]\nType=Application\nName=Free AI POS\nComment=Start the POS in the background\nExec=${qq(node)} ${qq(script)} ${flag}\nX-GNOME-Autostart-enabled=true\nNoDisplay=true\n`;
+  return `[Desktop Entry]\nType=Application\nName=NINDITO POS\nComment=Start the POS in the background\nExec=${qq(node)} ${qq(script)} ${flag}\nX-GNOME-Autostart-enabled=true\nNoDisplay=true\n`;
 }
 
 export function autostartStatus() {

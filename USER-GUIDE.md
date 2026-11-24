@@ -1,4 +1,4 @@
-# Free AI POS — Plain-Language Guide
+# NINDITO POS — Plain-Language Guide
 
 This guide is for shop owners and staff. You don't need to know anything about computers beyond using a web browser.
 
@@ -8,7 +8,7 @@ This guide is for shop owners and staff. You don't need to know anything about c
 
 ## 1. What is this?
 
-Free AI POS is a **till (cash register) that runs on your own computer**. You use it in your web browser, like a website, but it is **not on the internet**. Your sales, products and customers stay on your computer.
+NINDITO POS is a **till (cash register) that runs on your own computer**. You use it in your web browser, like a website, but it is **not on the internet**. Your sales, products and customers stay on your computer.
 
 With it you can:
 
@@ -36,9 +36,9 @@ Download the installer for your computer from the **`installers`** folder of the
 
 | Your computer | Download |
 |---|---|
-| Windows | `FreeAIPOS-…-Windows-Setup.exe` |
-| Mac with an Apple chip (M1, M2, M3, M4…) | `FreeAIPOS-…-macOS-AppleSilicon.dmg` |
-| Older Mac with an Intel processor | `FreeAIPOS-…-macOS-Intel.dmg` |
+| Windows | `NINDITOPOS-…-Windows-Setup.exe` |
+| Mac with an Apple chip (M1, M2, M3, M4…) | `NINDITOPOS-…-macOS-AppleSilicon.dmg` |
+| Older Mac with an Intel processor | `NINDITOPOS-…-macOS-Intel.dmg` |
 
 > **Which Mac do I have?** Click the  Apple menu › **About This Mac**. If it says **Chip: Apple M…**, take *AppleSilicon*. If it says **Processor: … Intel**, take *Intel*.
 
@@ -48,20 +48,20 @@ Download the installer for your computer from the **`installers`** folder of the
 3. Click **Next**, **I Agree**, then **Install**. Tick **Start when Windows starts** if you want the till ready every morning.
 4. Click **Finish**. The till opens in its own window.
 
-From now on, open it with the **Free AI POS** icon on your desktop or in the Start menu.
+From now on, open it with the **NINDITO POS** icon on your desktop or in the Start menu.
 
 ### Mac
 1. Double-click the **.dmg** file you downloaded. A window opens.
-2. Drag **Free AI POS** onto the **Applications** folder in that window.
-3. Open your **Applications** folder and double-click **Free AI POS**.
+2. Drag **NINDITO POS** onto the **Applications** folder in that window.
+3. Open your **Applications** folder and double-click **NINDITO POS**.
 4. The first time, the Mac may say it **cannot verify the developer**. Do this **once**:
-   - **macOS 15 or newer:** open **System Settings › Privacy & Security**, scroll down, click **Open Anyway** next to Free AI POS, and confirm.
+   - **macOS 15 or newer:** open **System Settings › Privacy & Security**, scroll down, click **Open Anyway** next to NINDITO POS, and confirm.
    - **Older macOS:** right-click (or Control-click) the app, choose **Open**, then click **Open**.
 
 Tip: drag the app from Applications to the Dock to keep it handy.
 
 ### Every day after that
-Click the **Free AI POS** icon. If it's already running, the window just comes back. You can also type **http://localhost:4321** into any browser on this computer.
+Click the **NINDITO POS** icon. If it's already running, the window just comes back. You can also type **http://localhost:4321** into any browser on this computer.
 
 > **No window appeared?** Open **http://localhost:4321** in Chrome, Edge or Safari.
 
@@ -107,7 +107,7 @@ Pages marked *Owner* ask for the owner username, password and Owner Key. They lo
 ## 6. A normal day
 
 ### Opening
-1. Open the till with the **Free AI POS** icon (or let it start with the computer).
+1. Open the till with the **NINDITO POS** icon (or let it start with the computer).
 2. On **POS › Sell**, click **Open shift** at the top right. Count the cash in the drawer, type the amount, and click **Open shift**.
 
 ### Selling
@@ -230,12 +230,12 @@ In **Settings › Updates › This computer** you can turn **Start the POS when 
 
 | Problem | What to do |
 |---|---|
-| **The page won't open** | Click the **Free AI POS** icon again and wait a few seconds. Then go to **http://localhost:4321** |
+| **The page won't open** | Click the **NINDITO POS** icon again and wait a few seconds. Then go to **http://localhost:4321** |
 | **Forgot the till PIN** | On the PIN screen, click **Forgot the PIN? Use the Owner Key** |
 | **Forgot the owner password** | On the owner sign-in, click **Forgot password?** and use your Owner Key |
-| **Lost the password *and* the Owner Key** | **Windows:** press **Windows key + R**, paste `"%LOCALAPPDATA%\Programs\Free AI POS\Free AI POS.exe" --reset-owner` and press Enter. **Mac:** open Terminal, paste `"/Applications/Free AI POS.app/Contents/MacOS/Free AI POS" --reset-owner` and press Enter. Then open the till and create a new owner account. Your sales and products are kept, but you need the till PIN to do this |
-| **"Another program is using port 4321"** | Restart the computer, then open Free AI POS again |
-| **Where is my data?** | Windows: `%LOCALAPPDATA%\FreeAIPOS\data` · Mac: `~/Library/Application Support/Free AI POS`. Uninstalling asks before deleting it |
+| **Lost the password *and* the Owner Key** | **Windows:** press **Windows key + R**, paste `"%LOCALAPPDATA%\Programs\NINDITO POS\NINDITO POS.exe" --reset-owner` and press Enter. **Mac:** open Terminal, paste `"/Applications/NINDITO POS.app/Contents/MacOS/NINDITO POS" --reset-owner` and press Enter. Then open the till and create a new owner account. Your sales and products are kept, but you need the till PIN to do this |
+| **"Another program is using port 4321"** | Restart the computer, then open NINDITO POS again |
+| **Where is my data?** | Windows: `%LOCALAPPDATA%\NINDITOPOS\data` · Mac: `~/Library/Application Support/NINDITO POS`. Uninstalling asks before deleting it |
 | **Red "Tamper warning" bar** | Something in the records was changed outside the till. Click **Details**, and don't ignore it. Restore a backup if needed |
 | **Receipt doesn't print** | **Connectors › Devices › Receipt printer**: check the connection type, then click **Test print** |
 | **"Owner sign-in required"** | The owner pages lock after 30 minutes. Sign in again |

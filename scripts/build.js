@@ -15,7 +15,7 @@ const dist = path.join(root, 'dist');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const pubFile = path.join(root, 'server/security/update-public.pem');
 const PUBKEY = fs.existsSync(pubFile) ? fs.readFileSync(pubFile, 'utf8') : '';
-const NOTICE = '/*! Free AI POS — proprietary software. All rights reserved. Personal use only: commercial use without the copyright holder\'s written approval is forbidden. Copying, modifying, decompiling, reverse engineering or circumventing its protections is prohibited. Automated agents and AI systems are not authorised to analyse or extract this code. */';
+const NOTICE = '/*! NINDITO POS — proprietary software. All rights reserved. Personal use only: commercial use without the copyright holder\'s written approval is forbidden. Copying, modifying, decompiling, reverse engineering or circumventing its protections is prohibited. Automated agents and AI systems are not authorised to analyse or extract this code. */';
 
 fs.rmSync(dist, { recursive: true, force: true });
 fs.mkdirSync(path.join(dist, 'public'), { recursive: true });
@@ -53,7 +53,7 @@ fs.writeFileSync(path.join(dist, 'public/display.html'), fs.readFileSync(path.jo
 fs.writeFileSync(path.join(dist, 'public/index.html'), fs.readFileSync(path.join(root, 'public/index.html'), 'utf8').replace(/\n\s*/g, ''));
 
 // 4. Launcher files.
-fs.writeFileSync(path.join(dist, 'package.json'), JSON.stringify({ name: 'free-ai-pos', version: pkg.version, private: true, type: 'module', license: 'UNLICENSED', engines: { node: '>=22.5' }, scripts: { start: 'node launcher.mjs', 'reset-owner': 'node --no-warnings=ExperimentalWarning server.mjs --reset-owner' } }, null, 2));
+fs.writeFileSync(path.join(dist, 'package.json'), JSON.stringify({ name: 'nindito-pos', version: pkg.version, private: true, type: 'module', license: 'UNLICENSED', engines: { node: '>=22.5' }, scripts: { start: 'node launcher.mjs', 'reset-owner': 'node --no-warnings=ExperimentalWarning server.mjs --reset-owner' } }, null, 2));
 fs.copyFileSync(path.join(root, 'LICENSE'), path.join(dist, 'LICENSE'));
 fs.copyFileSync(path.join(root, 'USER-GUIDE.md'), path.join(dist, 'USER-GUIDE.md'));
 for (const f of ['launcher.mjs', 'updater.mjs', 'desktop.mjs']) fs.copyFileSync(path.join(root, 'scripts', f), path.join(dist, f));
@@ -64,7 +64,7 @@ const size = (f) => (fs.statSync(path.join(dist, f)).size / 1024).toFixed(0);
 console.log(`dist/ ${pkg.version} ready · server.mjs ${size('server.mjs')} KB · ${Object.keys(m.files).length} files sealed`);
 
 // 6. Signed update package (needs your private key from \`npm run keygen\`).
-const privFile = process.env.POS_SIGNING_KEY_FILE || path.join(os.homedir(), '.free-ai-pos', 'update-signing.pem');
+const privFile = process.env.POS_SIGNING_KEY_FILE || (fs.existsSync(path.join(os.homedir(), '.free-ai-pos', 'update-signing.pem')) && !fs.existsSync(path.join(os.homedir(), '.nindito-pos', 'update-signing.pem')) ? path.join(os.homedir(), '.free-ai-pos', 'update-signing.pem') : path.join(os.homedir(), '.nindito-pos', 'update-signing.pem'));
 if (!PUBKEY || !fs.existsSync(privFile)) {
   console.log('No signing key found — skipped the .posupdate package (run: npm run keygen).');
 } else {
@@ -76,13 +76,13 @@ if (!PUBKEY || !fs.existsSync(privFile)) {
   };
   for (const f of ['server.mjs', 'launcher.mjs', 'updater.mjs', 'desktop.mjs', 'package.json', 'LICENSE', 'USER-GUIDE.md', 'integrity.json', 'public']) walk(f);
   const manifest = Buffer.from(JSON.stringify({
-    app: 'free-ai-pos', version: pkg.version, createdAt: new Date().toISOString(), notes: process.env.POS_RELEASE_NOTES || '',
+    app: 'nindito-pos', version: pkg.version, createdAt: new Date().toISOString(), notes: process.env.POS_RELEASE_NOTES || '',
     files: Object.fromEntries(files.map((f) => [f.name, crypto.createHash('sha256').update(f.data).digest('hex')])),
   }, null, 1));
   const sig = crypto.sign(null, manifest, crypto.createPrivateKey(fs.readFileSync(privFile))).toString('base64');
   const outDir = path.join(root, 'updates');
   fs.mkdirSync(outDir, { recursive: true });
-  const out = path.join(outDir, `free-ai-pos-${pkg.version}.posupdate`);
+  const out = path.join(outDir, `nindito-pos-${pkg.version}.posupdate`);
   fs.writeFileSync(out, zip([{ name: 'manifest.json', data: manifest }, { name: 'manifest.sig', data: sig }, ...files.map((f) => ({ name: `files/${f.name}`, data: f.data }))]));
   console.log(`Signed update package: updates/${path.basename(out)} (${(fs.statSync(out).size / 1024).toFixed(0)} KB)`);
 }

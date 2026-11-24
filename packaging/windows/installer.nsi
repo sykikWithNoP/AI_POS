@@ -1,12 +1,12 @@
-; Windows installer for Free AI POS. Per-user install: no administrator rights needed.
-; App:  %LOCALAPPDATA%\Programs\Free AI POS     Data: %LOCALAPPDATA%\FreeAIPOS\data (kept on uninstall unless chosen)
+; Windows installer for NINDITO POS. Per-user install: no administrator rights needed.
+; App:  %LOCALAPPDATA%\Programs\NINDITO POS     Data: %LOCALAPPDATA%\NINDITOPOS\data (kept on uninstall unless chosen)
 Unicode true
 !include "MUI2.nsh"
 !include "FileFunc.nsh"
 !include "LogicLib.nsh"
 
-!define APP "Free AI POS"
-!define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\FreeAIPOS"
+!define APP "NINDITO POS"
+!define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\NINDITOPOS"
 
 Name "${APP} ${VERSION}"
 OutFile "${OUT}"
@@ -80,7 +80,7 @@ SectionEnd
 Section /o "Start when Windows starts" SecStartup
   ; Same file the in-app switch (Settings > Updates > This computer) writes, so both stay in sync.
   FileOpen $0 "$SMSTARTUP\${APP}.vbs" w
-  FileWrite $0 `' Starts Free AI POS in the background when you sign in to Windows.$\r$\n`
+  FileWrite $0 `' Starts NINDITO POS in the background when you sign in to Windows.$\r$\n`
   FileWrite $0 `CreateObject("WScript.Shell").Run """$INSTDIR\node\node.exe"" ""$INSTDIR\app\desktop.mjs"" --background", 0, False$\r$\n`
   FileClose $0
 SectionEnd
@@ -106,6 +106,6 @@ Section "Uninstall"
   RMDir "$INSTDIR"
   DeleteRegKey HKCU "${UNINST_KEY}"
   MessageBox MB_YESNO|MB_ICONEXCLAMATION|MB_DEFBUTTON2 "Also delete ALL your sales, products, customers and backups?$\r$\n$\r$\nChoose No to keep them (recommended) - they come back if you install again." IDNO keep
-    RMDir /r "$LOCALAPPDATA\FreeAIPOS"
+    RMDir /r "$LOCALAPPDATA\NINDITOPOS"
   keep:
 SectionEnd

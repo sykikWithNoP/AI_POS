@@ -4,6 +4,7 @@
 import { h, icon, toast, errorToast } from './ui.js';
 import { get, post } from './api.js';
 import { dispatch } from './store.js';
+import { BRAND } from '/shared/brand.js';
 
 const TYPES = [
   { id: 'shop', icon: 'box', label: 'Shop / retail', hint: 'Groceries, clothes, pharmacy, hardware…' },
@@ -27,7 +28,7 @@ export function runWelcome(boot) {
     const next = h('button.btn.primary', { type: 'button', onclick: () => go() });
     const skip = h('button.btn.ghost.sm', { type: 'button', onclick: async () => { try { await post('/api/onboarding/skip'); } catch { /* ignore */ } overlay.remove(); resolve(false); } }, 'Skip setup — I\'ll do it later');
     const overlay = h('div.wizard', { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Welcome setup' },
-      h('div.wz-card', h('header.wz-head', h('div.brand-mark', icon('cart', 20)), h('div', h('h2', 'Welcome! Let\'s set up your till'), h('p.muted', 'About two minutes. You can change everything later.'))), dots, body,
+      h('div.wz-card', h('header.wz-head', h('div.brand-mark', icon('cart', 20)), h('div', h('h2', `Welcome to ${BRAND.name}! Let's set up your till`), h('p.muted', 'About two minutes. You can change everything later.'))), dots, body,
         h('footer.wz-foot', skip, h('div.spacer'), back, next)));
 
     const input = (obj, key, attrs = {}) => h('input.input', { value: obj[key] ?? '', oninput: (e) => { obj[key] = e.target.value; }, ...attrs });

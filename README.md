@@ -1,4 +1,4 @@
-# Free AI POS
+# NINDITO POS
 
 > **Licence: personal use only. Commercial use without the copyright holder's written approval is forbidden.** See [LICENSE](LICENSE).
 
@@ -171,9 +171,9 @@ npm run build
 
 This writes `dist/`: a single minified server bundle (`server.mjs`, all dependencies included), the launcher, a minified UI, no source maps, a proprietary notice, and a sealed `integrity.json`. Copy only the `dist` folder to the shop PC and start it with `npm start` inside it (Node 22.5+). If any shipped file is modified, the release refuses to start (exit code 78). During development, `npm run seal` records the current files and `POS_STRICT_INTEGRITY=1` turns on the same check.
 
-**Shipping updates (once):** run `npm run keygen`. It creates your private signing key at `~/.free-ai-pos/update-signing.pem` (back it up offline, never commit it) and writes the public key to `server/security/update-public.pem` (commit this; it's built into every release).
+**Shipping updates (once):** run `npm run keygen`. It creates your private signing key at `~/.nindito-pos/update-signing.pem` (back it up offline, never commit it) and writes the public key to `server/security/update-public.pem` (commit this; it's built into every release).
 
-**Each new version:** raise `version` in `package.json`, then `npm run build`. Besides `dist/`, it writes `updates/free-ai-pos-<version>.posupdate`, signed with your key (optionally with `POS_RELEASE_NOTES="…"`). Install it on the shop PC from Settings → Updates.
+**Each new version:** raise `version` in `package.json`, then `npm run build`. Besides `dist/`, it writes `updates/nindito-pos-<version>.posupdate`, signed with your key (optionally with `POS_RELEASE_NOTES="…"`). Install it on the shop PC from Settings → Updates.
 
 **What this cannot do:** someone with administrator access to the PC can still read and change anything on it; minified JavaScript can still be studied with enough effort. The protections above make every rule server-enforced, make tampering visible, and make extraction unrewarding. Keep the source repository private, and use full-disk encryption plus a PC login password for the strongest setup.
 

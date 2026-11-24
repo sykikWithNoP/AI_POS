@@ -137,7 +137,7 @@ test('updates: only signed, newer, untampered packages are accepted', async () =
   const upd = await import('../server/services/updates.js');
   const make = ({ version = '99.0.0', files = { 'server.mjs': 'ok', 'public/index.html': '<p>' }, key = privateKey, extra = [] } = {}) => {
     const entries = Object.entries(files).map(([n, d]) => ({ name: n, data: Buffer.from(d) }));
-    const manifest = Buffer.from(JSON.stringify({ app: 'free-ai-pos', version, files: Object.fromEntries(entries.map((f) => [f.name, crypto.createHash('sha256').update(f.data).digest('hex')])) }));
+    const manifest = Buffer.from(JSON.stringify({ app: 'nindito-pos', version, files: Object.fromEntries(entries.map((f) => [f.name, crypto.createHash('sha256').update(f.data).digest('hex')])) }));
     return zip([{ name: 'manifest.json', data: manifest }, { name: 'manifest.sig', data: crypto.sign(null, manifest, key).toString('base64') }, ...entries.map((f) => ({ name: `files/${f.name}`, data: f.data })), ...extra]);
   };
   assert.equal(upd.verifyPackage(make()).manifest.version, '99.0.0');

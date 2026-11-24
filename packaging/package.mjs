@@ -1,7 +1,7 @@
 // Builds the ready-to-install packages from dist/ (run `npm run build` first):
-//   installers/FreeAIPOS-<version>-Windows-Setup.exe       (Windows 10/11, 64-bit)
-//   installers/FreeAIPOS-<version>-macOS-AppleSilicon.dmg  (M1/M2/M3/M4 Macs)
-//   installers/FreeAIPOS-<version>-macOS-Intel.dmg         (older Intel Macs)
+//   installers/NINDITOPOS-<version>-Windows-Setup.exe       (Windows 10/11, 64-bit)
+//   installers/NINDITOPOS-<version>-macOS-AppleSilicon.dmg  (M1/M2/M3/M4 Macs)
+//   installers/NINDITOPOS-<version>-macOS-Intel.dmg         (older Intel Macs)
 // Each bundles the official Node.js runtime, so nothing else has to be installed.
 // Needs (on the build machine): makensis (NSIS), xorriso, tar, python3, internet access to nodejs.org.
 //   node packaging/package.mjs            all three
@@ -21,7 +21,7 @@ const dist = path.join(root, 'dist');
 const cache = path.join(here, '.cache');
 const stage = path.join(here, '.stage');
 const outDir = path.join(root, 'installers');
-const APP = 'Free AI POS';
+const APP = 'NINDITO POS';
 const want = process.argv.slice(2);
 const doWin = !want.length || want.includes('--win');
 const doMac = !want.length || want.includes('--mac');
@@ -66,7 +66,7 @@ for m,t in ((sys.argv[2]+'/node.exe','node.exe'),(sys.argv[2]+'/LICENSE','LICENS
   const nsis = path.join(here, 'windows');
   say('building the launcher');
   sh('makensis', ['-V2', `-DOUT=${path.join(s, `${APP}.exe`)}`, `-DVERSION=${version}`, path.join(nsis, 'launcher.nsi')]);
-  const out = path.join(outDir, `FreeAIPOS-${version}-Windows-Setup.exe`);
+  const out = path.join(outDir, `NINDITOPOS-${version}-Windows-Setup.exe`);
   say('building the Windows installer');
   sh('makensis', ['-V2', `-DOUT=${out}`, `-DVERSION=${version}`, `-DSTAGE=${s}`, path.join(nsis, 'installer.nsi')]);
   return out;
@@ -80,7 +80,7 @@ const infoPlist = () => `<?xml version="1.0" encoding="UTF-8"?>
 	<key>CFBundleDisplayName</key><string>${APP}</string>
 	<key>CFBundleExecutable</key><string>${APP}</string>
 	<key>CFBundleIconFile</key><string>icon</string>
-	<key>CFBundleIdentifier</key><string>com.freeaipos.app</string>
+	<key>CFBundleIdentifier</key><string>com.nindito.pos</string>
 	<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
 	<key>CFBundleName</key><string>${APP}</string>
 	<key>CFBundlePackageType</key><string>APPL</string>
@@ -94,25 +94,25 @@ const infoPlist = () => `<?xml version="1.0" encoding="UTF-8"?>
 `;
 
 const MAC_LAUNCHER = `#!/bin/sh
-# Starts Free AI POS (bundled Node.js + the app) and opens its window.
+# Starts NINDITO POS (bundled Node.js + the app) and opens its window.
 RES="$(cd "$(dirname "$0")/../Resources" && pwd)"
 exec "$RES/node" "$RES/app/desktop.mjs" "$@"
 `;
 
-const README = (arch) => `Free AI POS ${version} for Mac (${arch})
+const README = (arch) => `NINDITO POS ${version} for Mac (${arch})
 
-1. Drag "Free AI POS" onto the Applications folder.
-2. Open Applications and double-click "Free AI POS".
+1. Drag "NINDITO POS" onto the Applications folder.
+2. Open Applications and double-click "NINDITO POS".
    The first time, macOS may say it "cannot verify the developer":
    - macOS 15 or newer: open System Settings > Privacy & Security, scroll down
-     and click "Open Anyway" next to Free AI POS, then confirm.
+     and click "Open Anyway" next to NINDITO POS, then confirm.
    - macOS 14 or older: right-click (or Control-click) the app, choose Open,
      then click Open.
    You only have to do this once.
 3. The till opens in its own window. If no window appears, open
    http://localhost:4321 in your browser.
 
-Your data is kept in: ~/Library/Application Support/Free AI POS
+Your data is kept in: ~/Library/Application Support/NINDITO POS
 Personal use only - see LICENSE inside the app.
 `;
 
@@ -162,7 +162,7 @@ async function mac(arch, label) {
   const rawBuf = hfsVolume(fs.readFileSync(raw));
   const dmg = udzo(rawBuf, 'disk image (Apple_HFS : 0)');
   if (!readUdzo(dmg).subarray(0, rawBuf.length).equals(rawBuf)) throw new Error('disk image self-check failed');
-  const out = path.join(outDir, `FreeAIPOS-${version}-macOS-${label.replace(/\s+/g, '')}.dmg`);
+  const out = path.join(outDir, `NINDITOPOS-${version}-macOS-${label.replace(/\s+/g, '')}.dmg`);
   fs.writeFileSync(out, dmg);
   return out;
 }

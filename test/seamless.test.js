@@ -98,7 +98,7 @@ test('backups: copy to a USB/folder, reminder, and refuse the POS folder itself'
   assert.ok(Array.isArray(await ok('GET', '/api/backups/drives')));
   const r = await ok('POST', '/api/backups/copy', { folder: outside });
   assert.ok(fs.existsSync(path.join(r.folder, r.name)));
-  assert.equal(r.folder, path.join(fs.realpathSync(outside), 'FreeAIPOS-backups'));
+  assert.equal(r.folder, path.join(fs.realpathSync(outside), 'NINDITOPOS-backups'));
   const after = await ok('GET', '/api/backups');
   assert.equal(after.reminder.due, false);
   assert.equal(after.reminder.days, 0);
@@ -148,4 +148,16 @@ test('touch mode is a till setting', async () => {
   const { tillSettings } = await import('../server/services/settings.js');
   assert.equal(tillSettings().ui.touchMode, true);
   void db;
+});
+
+test('the product name is fixed and shown on bills and receipts', async () => {
+  const { BRAND } = await import('../shared/brand.js');
+  assert.equal(BRAND.name, 'NINDITO POS');
+  assert.throws(() => { 'use strict'; BRAND.name = 'Other'; });
+  const sale = db.prepare("SELECT id, public_token FROM sales WHERE status = 'paid' LIMIT 1").get();
+  const html = await (await fetch(`${B}/b/${sale.public_token}`)).text();
+  assert.match(html, /Powered by NINDITO POS/);
+  const { receiptFor } = await import('../server/services/printer.js');
+  const { getSale } = await import('../server/services/sales.js');
+  assert.match(Buffer.from(receiptFor(getSale(sale.id))).toString('latin1'), /Powered by NINDITO POS/);
 });

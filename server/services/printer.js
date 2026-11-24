@@ -3,6 +3,7 @@
 //  - system:  the OS print queue (USB printers) in raw mode: `lp` on macOS/Linux, a shared printer on Windows
 //  - browser: the normal printable e-bill (handled in the browser)
 import net from 'node:net';
+import { BRAND } from '../../shared/brand.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -86,6 +87,7 @@ export function receiptFor(sale, { width = 48, qr = true, baseUrl = '' } = {}) {
   if (sale.status === 'void') r.bold(true).line('*** CANCELLED ***').bold(false);
   r.rule().align('center');
   if (biz.receiptFooter) r.wrap(biz.receiptFooter);
+  r.line(BRAND.tagline);
   const pub = (biz.publicUrl || '').replace(/\/$/, '');
   if (qr && pub) r.line('Scan for your e-bill:').qr(`${pub}/b/${sale.public_token}`);
   return r.cut().build();

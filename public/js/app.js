@@ -15,6 +15,7 @@ import { renderConnectors } from './views/connectors.js';
 import { renderSettings } from './views/settings.js';
 
 import { SITEMAP, current, href, remember, replace } from './router.js';
+import { BRAND } from '/shared/brand.js';
 
 const RENDER = { pos: renderPos, overview: renderOverview, connectors: renderConnectors, settings: renderSettings };
 const NAV = SITEMAP;
@@ -87,7 +88,7 @@ function renderSetup() {
     } catch (e) { errorToast(e); }
   };
   app.replaceChildren(h('main.login', h('div.login-card.wide-card',
-    h('div.brand-mark', icon('shield', 28)), h('h1', 'Set up your POS'),
+    h('div.brand-mark', icon('shield', 28)), h('p.brand-product', BRAND.name), h('h1', 'Set up your POS'),
     h('div.setup-cols',
       h('div.form-grid', h('h3', '1. Till PIN'), h('p.muted', 'For quick approvals at the till: voids, refunds, big discounts, price changes.'), pin, again),
       h('div.form-grid', h('h3', '2. Owner account'), h('p.muted', 'Opens Overview, Settings and Connectors together with an Owner Key you\'ll get next.'), user, pass, pass2)),
@@ -107,7 +108,7 @@ function renderUnseal() {
   };
   for (const el of [pin, key]) el.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
   const toggle = h('button.btn.ghost.sm', { onclick: () => { useKey = !useKey; pin.hidden = useKey; key.hidden = !useKey; toggle.textContent = useKey ? 'Use the PIN instead' : 'Forgot the PIN? Use the Owner Key'; (useKey ? key : pin).focus(); } }, 'Forgot the PIN? Use the Owner Key');
-  app.replaceChildren(h('main.login', h('div.login-card', h('div.brand-mark', icon('lock', 28)), h('h1', 'Start the POS'),
+  app.replaceChildren(h('main.login', h('div.login-card', h('div.brand-mark', icon('lock', 28)), h('p.brand-product', BRAND.name), h('h1', 'Start the POS'),
     h('p.muted', 'Your keys are sealed. Enter the till PIN to unlock this session.'), pin, key,
     h('button.btn.primary.block', { onclick: submit }, icon('lock', 16), 'Unlock'), toggle)));
   setTimeout(() => pin.focus(), 50);
@@ -121,7 +122,7 @@ function renderLogin() {
   };
   pin.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
   app.replaceChildren(h('main.login',
-    h('div.login-card', h('div.brand-mark', icon('lock', 28)), h('h1', 'POS locked'), h('p.muted', 'Enter the owner PIN to open the till.'),
+    h('div.login-card', h('div.brand-mark', icon('lock', 28)), h('p.brand-product', BRAND.name), h('h1', 'POS locked'), h('p.muted', 'Enter the owner PIN to open the till.'),
       pin, h('button.btn.primary.block', { onclick: submit }, icon('lock', 16), 'Unlock'))));
   setTimeout(() => pin.focus(), 50);
 }
@@ -173,7 +174,7 @@ function renderShell() {
   tick(); setInterval(tick, 15000);
 
   const nav = h('nav.sidenav', { 'aria-label': 'Main' },
-    h('div.brand', h('div.brand-mark', icon('cart', 20)), h('span.brand-name', biz.name)),
+    h('div.brand', { title: BRAND.name }, h('div.brand-mark', icon('cart', 20)), h('div.brand-text', h('b.brand-product', BRAND.name), h('span.brand-name', biz.name))),
     h('ul', NAV.map((n) => h('li', h('a.nav-link', { href: href(n.id), 'data-id': n.id, title: `${n.label} (Alt+${n.key})${OWNER_AREAS.includes(n.id) ? ' · owner' : ''}` }, icon(n.icon, 22), h('span', n.label), OWNER_AREAS.includes(n.id) ? h('span.owner-lock', icon('lock', 12)) : null)))),
     h('div.nav-foot', h('button.nav-link', { onclick: toggleCopilot, title: 'AI copilot' }, icon('sparkles', 22), h('span', 'Copilot'))));
 
@@ -249,7 +250,7 @@ function route() {
   }
   const title = document.querySelector('.view-title');
   title.replaceChildren(h('span', page.title), h('span.crumb-sep', { 'aria-hidden': 'true' }, '›'), h('span.crumb', sub.label));
-  document.title = `${sub.label} · ${page.title} — ${getState().boot.settings.business.name}`;
+  document.title = `${sub.label} · ${page.title} — ${BRAND.name}`;
   cleanup?.();
   const view = document.getElementById('view');
   view.className = `view-${page.id} sub-${sub.id}`;

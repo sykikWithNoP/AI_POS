@@ -1,15 +1,15 @@
-; "Free AI POS.exe" — the program the shortcuts open. It starts the bundled Node.js hidden
+; "NINDITO POS.exe" — the program the shortcuts open. It starts the bundled Node.js hidden
 ; (no black console window) running desktop.mjs, which starts the POS and opens its window.
 Unicode true
 !include "FileFunc.nsh"
-Name "Free AI POS"
+Name "NINDITO POS"
 OutFile "${OUT}"
 Icon "..\icons\icon.ico"
 RequestExecutionLevel user
 SilentInstall silent
 VIProductVersion "${VERSION}.0"
-VIAddVersionKey "ProductName" "Free AI POS"
-VIAddVersionKey "FileDescription" "Free AI POS"
+VIAddVersionKey "ProductName" "NINDITO POS"
+VIAddVersionKey "FileDescription" "NINDITO POS"
 VIAddVersionKey "FileVersion" "${VERSION}"
 VIAddVersionKey "ProductVersion" "${VERSION}"
 VIAddVersionKey "LegalCopyright" "Personal use only - see LICENSE"

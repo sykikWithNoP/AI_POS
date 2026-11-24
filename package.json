@@ -1,5 +1,5 @@
 {
-  "name": "free-ai-pos",
+  "name": "nindito-pos",
   "version": "1.2.0",
   "description": "Advanced self-hosted POS with BYOK integrations: payments, IRD CBMS, Google Calendar, AI copilot and user-built extensions.",
   "type": "module",

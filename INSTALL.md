@@ -1,4 +1,4 @@
-# Installing Free AI POS
+# Installing NINDITO POS
 
 > Personal use only. Commercial use without the copyright holder's written approval is forbidden — see [LICENSE](LICENSE).
 
