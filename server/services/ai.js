@@ -13,7 +13,7 @@ const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 
 export function client() {
   const cfg = getGroup('ai');
-  if (!cfg.apiKey) throw badRequest('Add your Anthropic API key in Connectors → AI Copilot');
+  if (!cfg.apiKey) throw badRequest('Add your Anthropic API key in Connectors → Apps & AI');
   // All traffic goes through the egress gate: the key is pinned to api.anthropic.com and the SDK's
   // platform headers (OS, CPU architecture, runtime version) are stripped before anything leaves.
   const fetchVia = (url, init) => egressFetch(url, init, { purpose: 'ai' });

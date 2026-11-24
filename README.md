@@ -89,6 +89,19 @@ eSewa · Khalti · Stripe · Fonepay/Bank QR · Card terminal · Payment notific
 ### Build your own features
 **Settings → Extensions** runs small JavaScript plugins, sandboxed (see below), with a documented `pos` API: discount rules, toolbar buttons, checkout checks, custom items, and reactions to sales and payments. You can also describe a feature in plain words and the AI Copilot drafts the extension (using your Anthropic key). The draft opens **disabled** so you can read it first.
 
+## Navigation map
+
+Every screen has its own address, `#/<page>/<section>`, so bookmarks and the browser's back/forward buttons work. The sidebar holds the four pages; each page has the same header with its sections as tabs. Owner pages ask for the owner sign-in first.
+
+| Page | Sections |
+|---|---|
+| **POS** `Alt+1` | Sell · Items · Customers |
+| **Overview** `Alt+2` (owner) | Dashboard · Bills · Reports · IRD |
+| **Connectors** `Alt+3` (owner) | Payments · Tax & IRD · Apps & AI · Devices · Developer |
+| **Settings** `Alt+4` (owner) | Business · Appearance · Checkout · Memberships · Security · Extensions · Data · Updates |
+
+`Alt+[` / `Alt+]` step through sections; arrow keys move between focused tabs. Each page remembers the last section you opened.
+
 ## Architecture (one-way)
 
 ```

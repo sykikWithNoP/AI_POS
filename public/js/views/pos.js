@@ -11,7 +11,6 @@ import { shiftChip } from './shift.js';
 import { onScan, cameraButton } from '../scanner.js';
 import { post } from '../api.js';
 
-let tab = 'sell';
 let category = '';
 let query = '';
 
@@ -42,18 +41,16 @@ export function cartTotals(cart = getState().cart) {
   return { ...bill, rules, member, redeemAmount };
 }
 
-export function renderPos(root) {
-  const tabs = h('div.subtabs', { role: 'tablist' },
-    ['sell', 'items', 'customers'].map((t) => h(`button.subtab${tab === t ? '.active' : ''}`, { role: 'tab', 'aria-selected': tab === t, onclick: () => { tab = t; renderPos(root); } },
-      icon({ sell: 'cart', items: 'box', customers: 'user' }[t], 16), { sell: 'Sell', items: 'Items', customers: 'Customers' }[t])));
-  root.replaceChildren(h('div.pos-head', tabs, h('div.spacer'), shiftChip()));
-  if (tab === 'customers') {
+export function renderPos(root, { sub = 'sell', actions } = {}) {
+  actions?.append(shiftChip());
+  root.replaceChildren();
+  if (sub === 'customers') {
     const box = h('div.items-wrap');
     root.append(box);
     renderCustomers(box);
     return () => {};
   }
-  if (tab === 'items') {
+  if (sub === 'items') {
     const box = h('div.items-wrap');
     root.append(box);
     renderItemsManager(box, { onChange: loadItems });
@@ -205,7 +202,7 @@ function memberSearch() {
 /** Bottom-left Membership button: sell a plan to the current customer (or pick one first). */
 function membershipAction() {
   const plans = getState().boot.plans;
-  if (!plans.length) { toast('Create membership tiers in Settings → Memberships first', 'warn'); location.hash = '#/settings'; return; }
+  if (!plans.length) { toast('Create membership tiers in Settings → Memberships first', 'warn'); location.hash = '#/settings/memberships'; return; }
   const c = getState().cart.customer;
   if (!c?.id) { toast('Pick the member first', 'info'); pickCustomerDialog(c, (cust) => { dispatch({ type: 'cart/customer', customer: cust, replace: true }); if (cust.id) membershipAction(); }); return; }
   const m = modal({

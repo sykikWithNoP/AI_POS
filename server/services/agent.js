@@ -157,7 +157,7 @@ async function step(conv) {
 }
 
 export async function send({ conversationId, text, files } = {}) {
-  if (!getGroup('ai').apiKey && !createOverride) throw badRequest('Add your Anthropic API key in Connectors → AI Copilot');
+  if (!getGroup('ai').apiKey && !createOverride) throw badRequest('Add your Anthropic API key in Connectors → Apps & AI');
   if (text) screenPrompt(text, { source: 'agent' });
   let conv = conversationId && convs.get(conversationId);
   if (conversationId && !conv) throw notFound('Conversation (it may have expired)');

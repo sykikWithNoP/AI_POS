@@ -6,9 +6,9 @@ import { loadedExtensions, reloadExtensions } from '../extensions.js';
 import { showOwnerKey, ownerSignOut } from '../owner.js';
 import { applyTheme, THEMES, VAR_KEYS, paletteFromImage, paletteFromHue, prepareImage, setImageVars, contrast } from '../theme.js';
 
-export function renderSettings(root) {
-  const s = getState().boot.settings;
-  root.replaceChildren(h('div.settings',
+/** Settings sub-pages. Each one is a column of cards with its own Save button. */
+const PAGES = {
+  business: (s) => [
     groupCard('business', 'Business profile', 'receipt', [
       ['name', 'Shop name'], ['address', 'Address'], ['phone', 'Phone'], ['email', 'Email'], ['pan', 'PAN / VAT number', 'Printed on tax invoices'],
       ['logoUrl', 'Logo (stored on this PC)', null, 'image'], ['currency', 'Currency code'], ['currencySymbol', 'Currency symbol'], ['locale', 'Number locale', 'e.g. en-IN, ne-NP, en-US'],
@@ -20,8 +20,9 @@ export function renderSettings(root) {
       ['label', 'Tax label'], ['rate', 'Default tax rate %', 'Nepal VAT is 13%', null, 'number'], ['inclusive', 'Prices include tax', null, 'toggle'],
       ['serviceChargeRate', 'Service charge %', 'Applied before VAT (restaurants: 10%)', null, 'number'],
     ], s.tax),
-    appearanceCard(),
-    membershipsCard(),
+  ],
+  appearance: () => [appearanceCard()],
+  selling: (s) => [
     groupCard('checkout', 'Checkout & pay later', 'wallet', [
       ['allowPostpone', 'Allow pay later (postponed payments)', null, 'toggle'],
       ['postponeRequiresCustomer', 'Pay later only for saved customers', null, 'toggle'],
@@ -38,13 +39,17 @@ export function renderSettings(root) {
     groupCard('shifts', 'Shifts & cash drawer', 'wallet', [
       ['required', 'Require an open shift to sell', 'Off: shifts are optional; sales without a shift are still recorded', 'toggle'],
     ], s.shifts),
-    securityCard(),
-    integrityCard(),
-    privacyCard(),
-    extensionsCard(),
-    migrationCard(),
-    backupCard(),
-    updatesCard()));
+  ],
+  memberships: () => [membershipsCard()],
+  security: () => [securityCard(), integrityCard(), privacyCard()],
+  extensions: () => [extensionsCard()],
+  data: () => [migrationCard(), backupCard()],
+  updates: () => [updatesCard()],
+};
+
+export function renderSettings(root, { sub = 'business' } = {}) {
+  const s = getState().boot.settings;
+  root.replaceChildren(h('div.settings', (PAGES[sub] || PAGES.business)(s)));
 }
 
 function groupCard(group, title, ic, fields, values, after) {
@@ -126,7 +131,7 @@ function integrityCard() {
     } catch { /* ignore */ }
   };
   check();
-  return h('section.card.span2',
+  return h('section.card',
     h('header.card-head', h('h3', icon('shield', 18), 'Integrity & audit log'), h('button.btn.sm', { onclick: check }, icon('refresh', 14), 'Verify now')),
     h('p.hint', 'Every bill, payment, refund, cash movement, rule change and protected action is signed into an append-only chain. Bills, payments and refunds cannot be edited or deleted, and any change made outside the POS (for example directly in the database file) shows up here.'),
     status, h('h4', 'Recent activity'), log);
@@ -154,7 +159,7 @@ function extensionsCard() {
         h('button.icon-btn', { title: 'Delete', 'aria-label': `Delete ${x.name}`, onclick: async () => { if (await confirmDialog(`Delete extension "${x.name}"?`, { danger: true, okLabel: 'Delete' })) { await del(`/api/extensions/${x.id}`); load(); } } }, icon('trash', 16))))) : [h('li.muted', 'No extensions yet. Write one or let AI draft it from a description.')]));
   };
   load().catch(errorToast);
-  return h('section.card.span2',
+  return h('section.card',
     h('header.card-head', h('h3', icon('code', 18), 'Extensions — build your own features')),
     h('p.hint', 'Extensions are small JavaScript plugins that hook into the POS: discount rules, toolbar buttons, checkout checks, custom items, reactions to payments. They run in a locked sandbox with no internet, no access to your keys or settings, and they cannot change prices or tax rules — the server re-checks every bill.'),
     list,
@@ -375,7 +380,7 @@ function membershipsCard() {
   }
 
   load().catch(errorToast);
-  return h('section.card.span2',
+  return h('section.card',
     h('header.card-head', h('h3', '★ Memberships'), h('button.btn.primary', { onclick: () => planDialog(null) }, icon('plus', 16), 'New tier')),
     h('p.hint', 'Create tiers with an automatic discount and a points multiplier. Sell them from the ★ Membership button on the POS (activates when paid), or set a customer\'s tier directly below.'),
     plansBox,
@@ -437,7 +442,7 @@ function appearanceCard() {
       h('button.theme-tile.add', { onclick: () => themeBuilder(null, draw, choose) }, icon('plus', 22), 'Create from picture'));
   }
   draw();
-  return h('section.card.span2',
+  return h('section.card',
     h('header.card-head', h('h3', icon('moon', 18), 'Appearance'), h('label.toggle', sound, h('span.track'), h('span', 'Payment chime'))),
     h('p.hint', 'Pick one of 15 themes, or create your own from a picture — the POS reads its colours, picks a readable accent, and can show the picture behind the screens.'),
     grid);
@@ -561,7 +566,7 @@ function privacyCard() {
     catch (e) { off.checked = !off.checked; errorToast(e); }
   });
   load();
-  return h('section.card.span2',
+  return h('section.card',
     h('header.card-head', h('h3', icon('shield', 18), 'Privacy — what leaves this PC'), h('button.btn.sm', { onclick: load }, icon('refresh', 14), 'Refresh')),
     h('p.hint', 'The server only connects to services you switched on, over HTTPS, without revealing anything about this computer (no OS, device or software details, no referrer). Each saved key can only be sent to its own provider; a key headed anywhere else — or a POS API key leaving at all — is blocked and logged. The screen never loads anything from other websites.'),
     h('label.toggle', off, h('span.track'), h('span', h('b', 'Offline mode'), ' — block every outbound connection (cash/card/QR selling keeps working)')),
@@ -609,7 +614,7 @@ function migrationCard() {
       } }, 'Import')),
       result);
   }
-  return h('section.card.span2',
+  return h('section.card',
     h('header.card-head', h('h3', icon('upload', 18), 'Move from another system')),
     h('p.hint', 'Bring items, customers, opening stock or past sales from your old POS or spreadsheet (CSV, TSV or JSON export). Past sales are kept as history: they appear in reports but are never sent to IRD again.'),
     h('div.form-grid.two', field('What are you importing?', kindSel), h('label.btn', { style: { alignSelf: 'end' } }, icon('upload', 16), 'Choose export file…', file)),

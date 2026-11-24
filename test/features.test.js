@@ -252,6 +252,11 @@ test('migration: preview with auto-mapping, dry run changes nothing, import, his
   assert.equal(imp.created_at.slice(0, 10), '2025-12-01');
   const { verify } = await import('../server/security/ledger.js');
   assert.equal(verify().ok, true); // imported bills are signed into the ledger
+  // History from the old system can't be voided or refunded here (its stock and tax were handled there).
+  const { voidSale } = await import('../server/services/sales.js');
+  const { createRefund } = await import('../server/services/refunds.js');
+  assert.throws(() => voidSale(imp.id, 'test'), /Imported bills/);
+  assert.throws(() => createRefund(imp.id, { lines: [{ saleItemId: 1, qty: 1 }], reason: 'x' }), /Imported bills/);
 });
 
 test('AI agent: reads run automatically, writes wait for approval, attachments flow to tools', async () => {

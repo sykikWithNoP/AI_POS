@@ -6,14 +6,14 @@ import { dispatch } from './services/webhooksOut.js';
 import { syncSale, returnSale, returnRefund } from './services/ird.js';
 import * as calendar from './services/calendar.js';
 import { formatMoney } from '../shared/billing.js';
-import { httpJson, log } from './lib.js';
+import { httpJson, log, badRequest } from './lib.js';
 
 export async function sendTelegram(text, cfg = getGroup('telegram')) {
-  if (!cfg.botToken || !cfg.chatId) throw new Error('Telegram bot token and chat ID are required');
+  if (!cfg.botToken || !cfg.chatId) throw badRequest('Telegram bot token and chat ID are required');
   const r = await httpJson(`https://api.telegram.org/bot${cfg.botToken}/sendMessage`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: cfg.chatId, text }),
   });
-  if (!r.ok) throw new Error(`Telegram: ${r.json?.description || r.status}`);
+  if (!r.ok) throw badRequest(`Telegram: ${r.json?.description || r.status}`);
   return true;
 }
 

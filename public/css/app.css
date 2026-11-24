@@ -85,7 +85,23 @@ kbd { font: 11px var(--mono); padding: 1px 5px; border-radius: 4px; border: 1px 
 .top-actions { display: flex; align-items: center; gap: 6px; }
 .clock { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 6px; }
 #view { flex: 1; overflow: auto; padding: 16px 20px 24px; }
-#view.view-pos { padding: 12px 16px 0; display: flex; flex-direction: column; overflow: hidden; }
+#view.view-pos.sub-sell { padding: 12px 16px 0; display: flex; flex-direction: column; overflow: hidden; }
+#view.view-pos.sub-sell .page-body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+/* ---------- page frame: every page = breadcrumb title + sub-page tabs + actions + body ---------- */
+.view-title { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.view-title .crumb-sep { color: var(--muted); font-weight: 400; }
+.view-title .crumb { color: var(--muted); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.page-head { display: flex; align-items: center; gap: 8px 12px; margin-bottom: 14px; flex-wrap: wrap; }
+.subnav { display: flex; flex-wrap: wrap; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 3px; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.subnav::-webkit-scrollbar { display: none; }
+.subnav .subtab { text-decoration: none; white-space: nowrap; }
+.subnav .subtab:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.page-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.page-actions:empty { display: none; }
+.page-body > .settings, .page-body > .connectors, .page-body > .overview { min-width: 0; }
+.subtabs.small .subtab { padding: 5px 12px; font-size: 13px; }
+.small-note { font-size: 13px; margin: 0; }
 
 /* ---------- controls ---------- */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface); cursor: pointer; font-weight: 550; text-decoration: none; color: var(--text); white-space: nowrap; }
@@ -156,7 +172,6 @@ details summary { cursor: pointer; color: var(--muted); font-weight: 600; margin
 .item-cell small { display: block; }
 
 /* ---------- POS ---------- */
-.pos-head { display: flex; align-items: center; gap: 8px 12px; margin-bottom: 10px; flex-wrap: wrap; }
 .subtabs { display: inline-flex; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 3px; }
 .subtab { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border: 0; background: none; border-radius: 7px; cursor: pointer; font-weight: 600; color: var(--muted); }
 .subtab.active { background: var(--accent); color: var(--accent-ink); }
@@ -329,7 +344,8 @@ ol.rank { counter-reset: r; } ol.rank li::before { counter-increment: r; content
 .keys li > div, .ext-list li > div:first-child { min-width: 0; overflow-wrap: anywhere; }
 .check-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px; }
 .check { display: flex; gap: 6px; align-items: center; font-size: 13px; font-family: var(--mono); }
-.settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 16px; align-items: start; }
+/* Every settings sub-page is one column of cards, so pages read the same top to bottom. */
+.settings { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; max-width: 1040px; }
 .settings .card { display: grid; gap: 12px; }
 .span2 { grid-column: 1 / -1; }
 .code-editor { min-height: 260px; tab-size: 2; }
@@ -353,7 +369,10 @@ ol.rank { counter-reset: r; } ol.rank li::before { counter-increment: r; content
   .shell { height: 100dvh; }
   .topbar { padding: 10px 16px; } .view-title { font-size: 16px; } .clock { display: none; }
   #view { padding: 12px 16px 20px; }
-  #view.view-pos { padding: 10px 16px 0; overflow: auto; }
+  #view.view-pos.sub-sell { padding: 10px 16px 0; overflow: auto; }
+  .page-actions { margin-left: 0; }
+  .subnav { flex-wrap: nowrap; }
+  .view-title .crumb-sep, .view-title > span:first-child { display: none; }
   .sell { grid-template-columns: 1fr; flex: none; }
   .catalog { min-height: auto; }
   .product-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); flex: none; max-height: 46vh; }

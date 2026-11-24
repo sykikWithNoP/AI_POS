@@ -331,9 +331,9 @@ export function apiRouter() {
   r.get('/google/status', ownerRead, (req, res) => res.json({ connected: calendar.isConnected(), redirectUri: calendar.redirectUri(baseUrl(req)) }));
   r.get('/google/connect', ownerOnly, (req, res) => res.redirect(calendar.authUrl(baseUrl(req))));
   r.get('/google/callback', ownerRead, async (req, res) => {
-    if (req.query.error) return res.redirect('/#/connectors?google=denied');
+    if (req.query.error) return res.redirect('/#/connectors/apps?google=denied');
     await calendar.handleCallback(baseUrl(req), req.query);
-    res.redirect('/#/connectors?google=connected');
+    res.redirect('/#/connectors/apps?google=connected');
   });
   r.post('/google/disconnect', ownerOnly, (req, res) => { calendar.disconnect(); res.json({ ok: true }); });
   r.get('/google/events', ownerRead, async (req, res) => res.json(await calendar.upcoming(Number(req.query.days) || 14)));

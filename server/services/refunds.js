@@ -16,6 +16,7 @@ export const REFUND_METHODS = ['cash', 'card', 'qr', 'esewa', 'khalti', 'stripe'
 export function createRefund(saleId, { lines, method = 'cash', reason } = {}) {
   const sale = getSale(saleId);
   if (sale.status !== 'paid') throw conflict('Only paid bills can be refunded');
+  if (sale.imported) throw conflict('Imported bills are history from your previous system and cannot be refunded here');
   if (!reason || !String(reason).trim()) throw badRequest('A reason is required');
   if (!REFUND_METHODS.includes(method)) throw badRequest('Unknown refund method');
   if (!Array.isArray(lines) || !lines.length) throw badRequest('Pick at least one item to refund');

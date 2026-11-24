@@ -201,6 +201,7 @@ export function settleSale(saleId) {
 export function voidSale(id, reason) {
   const s = getSale(id);
   if (s.status === 'void') throw conflict('Sale already void');
+  if (s.imported) throw conflict('Imported bills are history from your previous system and cannot be voided here')
   if (s.refunded > 0) throw conflict('This bill has refunds; refund the remaining items instead of voiding');
   if (!reason || !String(reason).trim()) throw badRequest('A reason is required to void a bill');
   tx(() => {

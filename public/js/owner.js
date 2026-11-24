@@ -2,8 +2,9 @@
 import { h, icon, toast, errorToast, modal, field } from './ui.js';
 import { get, post } from './api.js';
 import { getState, dispatch } from './store.js';
+import { SITEMAP } from './router.js';
 
-export const OWNER_AREAS = ['overview', 'connectors', 'settings'];
+export const OWNER_AREAS = SITEMAP.filter((p) => p.owner).map((p) => p.id);
 
 export async function refreshBoot() {
   dispatch({ type: 'boot', boot: await get('/api/bootstrap') });

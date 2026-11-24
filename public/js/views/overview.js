@@ -9,39 +9,50 @@ let offset = 0;
 let period = 'month';
 const PERIOD_LABEL = { day: 'Today', month: 'This month', year: 'This year' };
 
-let tab = 'dashboard';
-export function renderOverview(root) {
+/** Overview sub-pages: dashboard (KPIs + charts), bills (search, refunds, voids), reports, IRD. */
+export function renderOverview(root, { sub = 'dashboard', actions } = {}) {
   const box = h('div.overview');
-  const tabs = h('div.subtabs', { role: 'tablist' }, [['dashboard', 'chart', 'Dashboard'], ['reports', 'receipt', 'Reports'], ['ird', 'shield', 'IRD']].map(([id, ic, label]) =>
-    h(`button.subtab${tab === id ? '.active' : ''}`, { role: 'tab', 'aria-selected': tab === id, onclick: () => { tab = id; renderOverview(root); } }, icon(ic, 16), label)));
-  root.replaceChildren(h('div.pos-head', tabs), box);
-  if (tab === 'reports') { import('./reports.js').then((m) => m.renderReports(box)); return () => {}; }
-  if (tab === 'ird') { import('./ird.js').then((m) => m.renderIrd(box)); return () => {}; }
-  const reload = () => load(box).catch(errorToast);
+  root.replaceChildren(box);
+  if (sub === 'reports') { import('./reports.js').then((m) => m.renderReports(box)); return () => {}; }
+  if (sub === 'ird') { import('./ird.js').then((m) => m.renderIrd(box)); return () => {}; }
+  const draw = sub === 'bills' ? loadBills : load;
+  const reload = () => draw(box, actions).catch(errorToast);
   reload();
-  const off = onServerEvent((e) => { if (['sale.paid', 'sale.void', 'sale.postponed'].includes(e.type)) reload(); });
-  return off;
+  return onServerEvent((e) => { if (['sale.paid', 'sale.void', 'sale.postponed', 'refund.created'].includes(e.type)) reload(); });
 }
 
-async function load(box) {
+/** Period switcher shared by Dashboard and Bills (same period on both, so numbers line up). */
+function periodBar(o, redraw) {
+  const setPeriod = (p) => { period = p; offset = 0; redraw(); };
+  return h('div.ov-head',
+    h('div.subtabs.small', { role: 'tablist', 'aria-label': 'Period' }, ['day', 'month', 'year'].map((p) => h(`button.subtab${period === p ? '.active' : ''}`, { role: 'tab', 'aria-selected': String(period === p), onclick: () => setPeriod(p) }, PERIOD_LABEL[p]))),
+    h('div.month-nav',
+      h('button.icon-btn', { 'aria-label': 'Previous period', onclick: () => { offset--; redraw(); } }, icon('chevronLeft')),
+      h('h2', o.label),
+      h('button.icon-btn', { 'aria-label': 'Next period', disabled: offset >= 0, onclick: () => { offset++; redraw(); } }, icon('chevronRight'))));
+}
+
+async function loadBills(box, actions) {
+  const o = await get(`/api/overview?period=${period}&offset=${offset}`);
+  actions?.replaceChildren(h('a.btn', { href: `/api/sales/export.csv?from=${encodeURIComponent(o.from)}&to=${encodeURIComponent(o.to)}` }, icon('download', 16), 'Export CSV'));
+  box.replaceChildren(periodBar(o, () => loadBills(box, actions)), billsSection(o));
+}
+
+async function load(box, actions) {
   const o = await get(`/api/overview?period=${period}&offset=${offset}`);
   const k = o.kpis;
   const delta = k.prevRevenue ? Math.round(((k.revenue - k.prevRevenue) / k.prevRevenue) * 100) : null;
   const vs = { day: 'yesterday', month: 'last month', year: 'last year' }[period];
-  const setPeriod = (p) => { period = p; offset = 0; load(box); };
+  const redraw = () => load(box, actions);
+  const setPeriod = (p) => { period = p; offset = 0; redraw(); };
   const snap = o.snapshot;
+  actions?.replaceChildren(
+    h('a.btn', { href: `/api/sales/export.csv?from=${encodeURIComponent(o.from)}&to=${encodeURIComponent(o.to)}` }, icon('download', 16), 'Export CSV'),
+    getState().boot.google.connected ? h('button.btn', { onclick: daySummary }, icon('calendar', 16), 'Close day → Calendar') : null);
   box.replaceChildren(
     h('div.snapshot', ['day', 'month', 'year'].map((p) => h(`button.snap${period === p && offset === 0 ? '.active' : ''}`, { onclick: () => setPeriod(p) },
       h('span.snap-label', PERIOD_LABEL[p], snap[p].label !== PERIOD_LABEL[p] ? h('small.muted', ` · ${snap[p].label}`) : null), h('b.snap-value', money(snap[p].revenue)), h('small.muted', `${snap[p].bills} bills`)))),
-    h('div.ov-head',
-      h('div.subtabs', { role: 'tablist' }, ['day', 'month', 'year'].map((p) => h(`button.subtab${period === p ? '.active' : ''}`, { role: 'tab', 'aria-selected': period === p, onclick: () => setPeriod(p) }, PERIOD_LABEL[p]))),
-      h('div.month-nav',
-        h('button.icon-btn', { 'aria-label': 'Previous period', onclick: () => { offset--; load(box); } }, icon('chevronLeft')),
-        h('h2', o.label),
-        h('button.icon-btn', { 'aria-label': 'Next period', disabled: offset >= 0, onclick: () => { offset++; load(box); } }, icon('chevronRight'))),
-      h('div.toolbar-actions',
-        h('a.btn', { href: `/api/sales/export.csv?from=${encodeURIComponent(o.from)}&to=${encodeURIComponent(o.to)}` }, icon('download', 16), 'Export CSV'),
-        getState().boot.google.connected ? h('button.btn', { onclick: daySummary }, icon('calendar', 16), 'Close day → Calendar') : null)),
+    periodBar(o, redraw),
     h('div.kpis',
       kpi('Net revenue', money(k.revenue), (delta === null ? `No sales ${vs}` : `${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta)}% vs ${vs}`) + (k.refunds ? ` · refunds ${money(k.refunds)}` : ''), delta === null ? '' : delta >= 0 ? 'up' : 'down'),
       kpi('Bills', k.bills, `${o.statusCounts.pending || 0} pending · ${o.statusCounts.void || 0} void`),
@@ -57,7 +68,7 @@ async function load(box) {
       card('Stock alerts', o.lowStock.length ? h('ul.rank', o.lowStock.map((i) => h('li', h('span', i.name), h('b', { class: i.stock <= 0 ? 'danger-text' : 'warn-text' }, `${i.stock} ${i.unit}`)))) : empty('All stocked', 'check')),
       card('IRD (CBMS)', irdCard(o.ird)),
       calendarCard()),
-    billsSection(o));
+    h('p.muted.small-note', 'Every bill for this period is under ', h('a', { href: '#/overview/bills' }, 'Bills'), '.'));
 }
 
 const kpi = (label, value, sub, trend = '') => h('div.kpi', h('span.kpi-label', label), h('b.kpi-value', value), h(`small.kpi-sub${trend ? '.' + trend : ''}`, sub));
@@ -86,7 +97,7 @@ function hours(hrs) {
 
 function irdCard(ird) {
   const cfg = getState().boot.settings.ird;
-  if (!cfg.enabled) return h('div.empty', icon('shield', 28), h('p', 'IRD sync is off.'), h('a.btn.sm', { href: '#/connectors' }, 'Set up'));
+  if (!cfg.enabled) return h('div.empty', icon('shield', 28), h('p', 'IRD sync is off.'), h('a.btn.sm', { href: '#/overview/ird' }, 'Set up'));
   return h('ul.rank',
     h('li', h('span', 'Synced'), h('b.ok-text', ird.synced || 0)),
     h('li', h('span', 'Pending'), h('b', ird.pending || 0)),
@@ -100,7 +111,7 @@ function calendarCard() {
   const c = card('Calendar', content, getState().boot.google.connected ? h('button.btn.sm', { onclick: () => eventDialog(() => fill()) }, icon('plus', 14), 'Event') : null);
   const fill = async () => {
     if (!getState().boot.google.connected) {
-      content.replaceChildren(h('div.empty', icon('calendar', 28), h('p', 'Connect Google Calendar to see reminders, deliveries and day-close notes here.'), h('a.btn.sm', { href: '#/connectors' }, 'Connect')));
+      content.replaceChildren(h('div.empty', icon('calendar', 28), h('p', 'Connect Google Calendar to see reminders, deliveries and day-close notes here.'), h('a.btn.sm', { href: '#/connectors/apps' }, 'Connect')));
       return;
     }
     try {
@@ -155,7 +166,7 @@ async function billDialog(id, refresh) {
     title: `Bill ${s.invoice_no}`, wide: true,
     body: h('div.bill-detail',
       h('div.meta-grid',
-        h('div', h('small', 'Status'), badge(s.status, { paid: 'ok', pending: 'warn', void: 'bad' }[s.status])),
+        h('div', h('small', 'Status'), badge(s.status, { paid: 'ok', pending: 'warn', void: 'bad' }[s.status]), s.imported ? badge('imported', '') : null),
         h('div', h('small', 'Date'), fmtDate(s.created_at)), h('div', h('small', 'Miti'), s.bs_date),
         h('div', h('small', 'Customer'), s.customer_name || 'Walk-in', s.customer_pan ? ` · PAN ${s.customer_pan}` : ''),
         h('div', h('small', 'IRD'), s.ird_status, s.ird_response?.message ? h('small.muted', ` — ${s.ird_response.message}`) : null),
@@ -168,11 +179,11 @@ async function billDialog(id, refresh) {
     actions: [
       { label: 'Open e-bill', onClick: () => window.open(`/b/${s.public_token}`, '_blank') },
       { label: 'Print', onClick: () => printReceipt(s) },
-      { label: 'Copy link', onClick: () => { navigator.clipboard?.writeText(link); toast('Link copied', 'success'); } },
-      ...(s.status === 'paid' && s.refunded < s.total ? [{ label: 'Refund items', onClick: (c) => { c(); refundDialog(s, refresh); } }] : []),
+      { label: 'Copy link', onClick: () => copyText(link) },
+      ...(s.status === 'paid' && s.refunded < s.total && !s.imported ? [{ label: 'Refund items', onClick: (c) => { c(); refundDialog(s, refresh); } }] : []),
       ...(s.status === 'pending' ? [{ label: 'Collect payment', primary: true, onClick: (c) => { c(); openCheckout(null, null, { sale: s }); } }] : []),
       ...(s.ird_status === 'failed' || s.ird_status === 'pending' ? [{ label: 'Retry IRD sync', onClick: async (c) => { try { await post(`/api/sales/${s.id}/ird-sync`); toast('IRD sync attempted', 'info'); c(); refresh(); } catch (e) { errorToast(e); } } }] : []),
-      ...(s.status !== 'void' && !s.refunded ? [{ label: 'Void bill', danger: true, onClick: async (c) => {
+      ...(s.status !== 'void' && !s.refunded && !s.imported ? [{ label: 'Void bill', danger: true, onClick: async (c) => {
         const reason = await promptDialog('Reason for cancelling this bill', '', { title: 'Void bill' });
         if (!reason) return;
         if (!(await confirmDialog(`Void ${s.invoice_no}? ${s.status === 'paid' ? 'Stock is returned and, if synced, a credit note is sent to IRD.' : ''}`, { okLabel: 'Void', danger: true }))) return;
@@ -205,4 +216,10 @@ function refundDialog(s, refresh) {
       } catch (e) { errorToast(e); }
     } }],
   });
+}
+
+/** Clipboard can be blocked (no permission, non-secure context): fall back to a selectable box. */
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); toast('Link copied', 'success'); }
+  catch { modal({ title: 'Copy this link', body: h('pre.code.select', text) }); }
 }
