@@ -75,7 +75,7 @@ function mix(methods) {
   const total = methods.reduce((a, m) => a + m.amount, 0) || 1;
   return h('div.mix',
     h('div.mix-bar', methods.map((m, i) => h(`span.seg.c${i % 6}`, { style: { width: `${(m.amount / total) * 100}%` }, title: `${m.method}: ${money(m.amount)}` }))),
-    h('ul.legend', methods.map((m, i) => h('li', h(`i.dot.c${i % 6}`), h('span', m.method), h('small.muted', `${m.n}×`), h('b', money(m.amount))))));
+    h('ul.legend', methods.map((m, i) => h('li', h(`i.dot.c${i % 6}`), h('span', { qr: 'QR', esewa: 'eSewa' }[m.method] || m.method.charAt(0).toUpperCase() + m.method.slice(1)), h('small.muted', `${m.n}×`), h('b', money(m.amount))))));
 }
 
 function hours(hrs) {

@@ -84,7 +84,7 @@ export function overview({ period = 'month', offset = 0 } = {}) {
   const methods = db.prepare(`SELECT p.method, COUNT(*) AS n, SUM(p.amount) AS amount FROM payments p JOIN sales s ON s.id = p.sale_id
       WHERE p.status = 'verified' AND s.status = 'paid' AND s.created_at >= ? AND s.created_at < ? GROUP BY p.method ORDER BY amount DESC`).all(from, to);
   const topItems = db.prepare(`SELECT si.name, SUM(si.qty) AS qty, SUM(si.total) AS revenue FROM sale_items si JOIN sales s ON s.id = si.sale_id
-      WHERE s.status = 'paid' AND s.created_at >= ? AND s.created_at < ? GROUP BY si.name ORDER BY revenue DESC LIMIT 8`).all(from, to);
+      WHERE s.status = 'paid' AND s.imported = 0 AND s.created_at >= ? AND s.created_at < ? GROUP BY si.name ORDER BY revenue DESC LIMIT 8`).all(from, to);
   const ird = db.prepare('SELECT ird_status, COUNT(*) AS n FROM sales WHERE created_at >= ? AND created_at < ? GROUP BY ird_status').all(from, to);
   const lowStock = db.prepare('SELECT id, name, stock, unit FROM items WHERE active = 1 AND stock IS NOT NULL AND stock <= 5 ORDER BY stock LIMIT 10').all();
 

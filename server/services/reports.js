@@ -77,7 +77,7 @@ export function profitByItem({ from, to } = {}) {
       SUM((si.total - si.tax) * (si.qty - si.refunded_qty) / si.qty) AS revenue,
       SUM(COALESCE(si.unit_cost, i.cost, 0) * (si.qty - si.refunded_qty)) AS cost
     FROM sale_items si JOIN sales s ON s.id = si.sale_id LEFT JOIN items i ON i.id = si.item_id
-    WHERE s.status = 'paid' AND s.created_at >= ? AND s.created_at < ? AND si.qty > 0
+    WHERE s.status = 'paid' AND s.imported = 0 AND s.created_at >= ? AND s.created_at < ? AND si.qty > 0
     GROUP BY si.name ORDER BY revenue DESC`).all(f, t);
   return { from: f, to: t, rows: rows.map((r) => ({ ...r, revenue: Math.round(r.revenue), cost: Math.round(r.cost), profit: Math.round(r.revenue - r.cost), margin: r.revenue ? Math.round(((r.revenue - r.cost) / r.revenue) * 1000) / 10 : 0 })) };
 }
