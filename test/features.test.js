@@ -207,3 +207,49 @@ test('receipt printer: ESC/POS bytes to a LAN printer, drawer kick, internet ref
   assert.ok(receiptFor(await ok('GET', `/api/sales/${s.id}`)).length > 100);
   fake.close();
 });
+
+test('migration: preview with auto-mapping, dry run changes nothing, import, history never sent to IRD', async () => {
+  const itemsCsv = 'Item Code;Product Name;Selling Price;Cost Price;Qty;VAT %\nP-1;Noodles;25;18;100;13\nP-2;Biscuit;"1,200";900;5;0\nP-3;Broken;abc;1;1;13\n';
+  const pv = await ok('POST', '/api/migrate/preview', { kind: 'items', text: itemsCsv });
+  assert.deepEqual(pv.columns, ['Item Code', 'Product Name', 'Selling Price', 'Cost Price', 'Qty', 'VAT %']);
+  assert.equal(pv.mapping.name, 'Product Name');
+  assert.equal(pv.mapping.price, 'Selling Price');
+  assert.equal(pv.mapping.sku, 'Item Code');
+  const before = (await ok('GET', '/api/items?all=1')).length;
+  const dry = await ok('POST', '/api/migrate/run', { kind: 'items', text: itemsCsv, mapping: pv.mapping, dryRun: true });
+  assert.equal(dry.created, 2);
+  assert.equal(dry.errorCount, 1);
+  assert.equal(dry.errors[0].row, 4);
+  assert.equal((await ok('GET', '/api/items?all=1')).length, before); // dry run changed nothing
+  const real = await ok('POST', '/api/migrate/run', { kind: 'items', text: itemsCsv, mapping: pv.mapping, dryRun: false });
+  assert.equal(real.created, 2);
+  const biscuit = (await ok('GET', '/api/items?q=Biscuit')).find((i) => i.sku === 'P-2');
+  assert.equal(biscuit.price, 120000);
+  assert.equal(biscuit.tax_rate, 0);
+
+  const cust = [{ Customer: 'Hari Bahadur', Mobile: '98-4100-0000', 'PAN No': '301234567', Points: '40' }];
+  const cpv = await ok('POST', '/api/migrate/preview', { kind: 'customers', text: JSON.stringify(cust) });
+  const cr = await ok('POST', '/api/migrate/run', { kind: 'customers', text: JSON.stringify(cust), mapping: cpv.mapping, dryRun: false });
+  assert.equal(cr.created, 1);
+  const hari = (await ok('GET', '/api/customers?q=Hari'))[0];
+  assert.equal(hari.phone, '9841000000');
+  assert.equal(hari.points, 40);
+
+  const salesTsv = 'Bill No\tDate\tParty\tAmount\tVAT\n1001\t2025-12-01\tOld Customer\t1130\t130\n1002\t15/12/2025\t\t500\t\n';
+  const spv = await ok('POST', '/api/migrate/preview', { kind: 'sales', text: salesTsv });
+  assert.equal(spv.mapping.invoice_no, 'Bill No');
+  const sr = await ok('POST', '/api/migrate/run', { kind: 'sales', text: salesTsv, mapping: spv.mapping, dryRun: false });
+  assert.equal(sr.created, 2, JSON.stringify(sr.errors));
+  const again = await ok('POST', '/api/migrate/run', { kind: 'sales', text: salesTsv, mapping: spv.mapping, dryRun: false });
+  assert.equal(again.skipped, 2); // no duplicates on re-import
+  const imp = db.prepare("SELECT * FROM sales WHERE import_ref = '1001'").get();
+  assert.equal(imp.invoice_no, 'IMP-1001');
+  assert.equal(imp.ird_status, 'off');
+  assert.equal(imp.taxable, 100000);
+  assert.equal(imp.paid, 113000);
+  assert.equal(imp.payment_method, 'imported');
+  assert.equal(imp.public_token.length, 24);
+  assert.equal(imp.created_at.slice(0, 10), '2025-12-01');
+  const { verify } = await import('../server/security/ledger.js');
+  assert.equal(verify().ok, true); // imported bills are signed into the ledger
+});

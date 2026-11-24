@@ -40,7 +40,7 @@ export function createApp() {
     });
     next();
   });
-  app.use(express.json({ type: 'application/json', limit: '5mb', verify: (req, res, buf) => { req.rawBody = buf.toString('utf8'); } }));
+  app.use(express.json({ type: 'application/json', limit: '12mb', verify: (req, res, buf) => { req.rawBody = buf.toString('utf8'); } }));
 
   app.use('/api/webhooks', webhookRouter());
   app.use('/api', apiRouter());

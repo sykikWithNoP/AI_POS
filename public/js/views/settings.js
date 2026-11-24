@@ -42,6 +42,7 @@ export function renderSettings(root) {
     integrityCard(),
     privacyCard(),
     extensionsCard(),
+    migrationCard(),
     backupCard(),
     updatesCard()));
 }
@@ -564,4 +565,51 @@ function privacyCard() {
     h('label.toggle', off, h('span.track'), h('span', h('b', 'Offline mode'), ' — block every outbound connection (cash/card/QR selling keeps working)')),
     h('h4', 'Allowed destinations and what is sent'), allowed,
     h('h4', 'Outbound activity (since start)'), log);
+}
+
+// ---------- Moving from another system ----------
+function migrationCard() {
+  const kindSel = h('select.input', { 'aria-label': 'What to import' });
+  const file = h('input', { type: 'file', accept: '.csv,.tsv,.txt,.json,text/csv,application/json' });
+  const stage = h('div.form-grid');
+  let text = '', pv = null;
+  get('/api/migrate/kinds').then((k) => kindSel.replaceChildren(...Object.entries(k).map(([id, v]) => h('option', { value: id }, v.label)))).catch(errorToast);
+  const reset = () => { stage.replaceChildren(); pv = null; };
+  kindSel.addEventListener('change', () => { if (text) previewNow(); });
+  file.addEventListener('change', async () => {
+    const f = file.files[0];
+    if (!f) return;
+    if (/\.xlsx?$/i.test(f.name)) { toast('Save the spreadsheet as CSV first (File → Save As → CSV)', 'warn', 6000); return; }
+    text = await f.text(); previewNow();
+  });
+  async function previewNow() {
+    reset();
+    try { pv = await post('/api/migrate/preview', { kind: kindSel.value, text }); } catch (e) { return errorToast(e); }
+    const selects = Object.fromEntries(pv.fields.map((f) => [f, h('select.input', h('option', { value: '' }, '— skip —'), pv.columns.map((c) => h('option', { value: c, selected: pv.mapping[f] === c }, c)))]));
+    const result = h('div');
+    const go = async (dryRun) => {
+      const mapping = Object.fromEntries(Object.entries(selects).map(([f, el]) => [f, el.value]).filter(([, v]) => v));
+      try {
+        const r = await post('/api/migrate/run', { kind: pv.kind, text, mapping, dryRun });
+        result.replaceChildren(h(`div.integrity.${r.errorCount ? 'bad' : 'ok'}`, icon(r.errorCount ? 'x' : 'check', 18), h('div',
+          h('b', dryRun ? 'Dry run (nothing saved): ' : 'Imported: '), `${r.created} new, ${r.updated} updated${r.skipped ? `, ${r.skipped} already imported` : ''}, ${r.errorCount} with problems of ${r.rows} rows.`,
+          r.errors.length ? h('ul', r.errors.slice(0, 8).map((e) => h('li', `Row ${e.row}: ${e.error}`))) : null)));
+        if (!dryRun) { toast('Import finished', 'success'); dispatch({ type: 'boot', boot: await get('/api/bootstrap') }); }
+      } catch (e) { errorToast(e); }
+    };
+    stage.replaceChildren(
+      h('p.hint', `${pv.rowCount} rows found. Match each field to a column in your file (guessed automatically).`),
+      h('div.form-grid.two', pv.fields.map((f) => field(`${f}${pv.required.includes(f) ? ' *' : ''}`, selects[f]))),
+      h('details', h('summary', 'Preview first rows'), h('div.table-wrap', h('table.table.compact', h('thead', h('tr', pv.columns.map((c) => h('th', c)))),
+        h('tbody', pv.sample.slice(0, 8).map((r) => h('tr', pv.columns.map((c) => h('td', r[c])))))))),
+      h('div.row-actions', h('button.btn', { onclick: () => go(true) }, 'Dry run'), h('button.btn.primary', { onclick: async () => {
+        if (await confirmDialog(`Import ${pv.rowCount} rows now? A backup is a good idea first.`, { okLabel: 'Import' })) go(false);
+      } }, 'Import')),
+      result);
+  }
+  return h('section.card.span2',
+    h('header.card-head', h('h3', icon('upload', 18), 'Move from another system')),
+    h('p.hint', 'Bring items, customers, opening stock or past sales from your old POS or spreadsheet (CSV, TSV or JSON export). Past sales are kept as history: they appear in reports but are never sent to IRD again.'),
+    h('div.form-grid.two', field('What are you importing?', kindSel), h('label.btn', { style: { alignSelf: 'end' } }, icon('upload', 16), 'Choose export file…', file)),
+    stage);
 }

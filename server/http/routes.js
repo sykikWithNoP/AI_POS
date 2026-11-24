@@ -30,6 +30,7 @@ import * as reports from '../services/reports.js';
 import * as backups from '../services/backups.js';
 import * as updates from '../services/updates.js';
 import * as printer from '../services/printer.js';
+import * as migrate from '../services/migrate.js';
 import express from 'express';
 import { allowedDestinations, egressActivity } from '../security/egress.js';
 import * as calendar from '../services/calendar.js';
@@ -337,6 +338,11 @@ export function apiRouter() {
     if (!text || text.length > 1500) throw badRequest('text required (max 1500 chars)');
     res.type('image/svg+xml').send(await QRCode.toString(text, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }));
   });
+  // ---------- moving from another system (owner area) ----------
+  r.get('/migrate/kinds', ownerRead, (req, res) => res.json(Object.fromEntries(Object.entries(migrate.KINDS).map(([k, v]) => [k, { label: v.label, fields: Object.keys(v.fields), required: v.required }]))));
+  r.post('/migrate/preview', ownerRead, (req, res) => res.json(migrate.preview(req.body || {})));
+  r.post('/migrate/run', ownerOnly, (req, res) => res.json(migrate.run({ ...(req.body || {}), dryRun: req.body?.dryRun !== false })));
+
   // ---------- printing & cash drawer ----------
   r.post('/print/sale/:id', owner, async (req, res) => res.json(await printer.printSale(Number(req.params.id))));
   r.post('/print/test', ownerRead, async (req, res) => res.json(await printer.testPrint()));
