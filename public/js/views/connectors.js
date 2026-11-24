@@ -5,32 +5,32 @@ import { getState, dispatch } from '../store.js';
 import { imageInput } from '../ui.js';
 
 const SPECS = [
-  { group: 'esewa', title: 'eSewa', icon: 'wallet', section: 'payments', desc: 'ePay v2 checkout. Sandbox works out of the box with eSewa\'s public test merchant.',
+  { group: 'esewa', steps: ["To practise: keep Sandbox on, tick Enabled and press Save. No account needed.", "For real money: ask eSewa merchant support for your merchant (product) code and secret key.", "Turn Sandbox off, paste both, press Save.", "Make a Rs 10 sale paid with eSewa. The tick turns green when eSewa confirms it."], title: 'eSewa', icon: 'wallet', section: 'payments', desc: 'ePay v2 checkout. Sandbox works out of the box with eSewa\'s public test merchant.',
     fields: [{ name: 'enabled', type: 'toggle', label: 'Enabled' }, { name: 'sandbox', type: 'toggle', label: 'Sandbox (test) mode' },
       { name: 'productCode', label: 'Merchant / product code', hint: 'EPAYTEST in sandbox' }, { name: 'secretKey', type: 'secret', label: 'Secret key', hint: 'Leave blank in sandbox to use the public test key' }], test: true },
-  { group: 'khalti', title: 'Khalti', icon: 'wallet', section: 'payments', desc: 'KPG-2 payment links with automatic lookup verification.',
+  { group: 'khalti', steps: ["Open a Khalti merchant account (test keys come from dev.khalti.com).", "Copy your secret key (live, or test with Sandbox on).", "Paste it here, tick Enabled, press Save, then Test.", "Make a Rs 10 sale paid with Khalti. The tick turns green when Khalti confirms it."], title: 'Khalti', icon: 'wallet', section: 'payments', desc: 'KPG-2 payment links with automatic lookup verification.',
     fields: [{ name: 'enabled', type: 'toggle', label: 'Enabled' }, { name: 'sandbox', type: 'toggle', label: 'Sandbox (dev.khalti.com)' }, { name: 'secretKey', type: 'secret', label: 'Live/Test secret key' }], test: true },
-  { group: 'stripe', title: 'Stripe', icon: 'link', section: 'payments', desc: 'Stripe Checkout links for international cards. Verified by polling; the webhook is optional.',
+  { group: 'stripe', steps: ["In Stripe: Developers → API keys → copy the Secret key (starts with sk_).", "Set the charge currency and exchange rate.", "Paste, tick Enabled, press Save, then Test.", "Take one small real card payment. The tick turns green when Stripe confirms it."], title: 'Stripe', icon: 'link', section: 'payments', desc: 'Stripe Checkout links for international cards. Verified by polling; the webhook is optional.',
     fields: [{ name: 'enabled', type: 'toggle', label: 'Enabled' }, { name: 'secretKey', type: 'secret', label: 'Secret key (sk_…)' },
       { name: 'webhookSecret', type: 'secret', label: 'Webhook signing secret (whsec_…)', hint: 'Only if you expose the POS via a tunnel: POST /api/webhooks/stripe' },
       { name: 'currency', label: 'Charge currency', hint: 'e.g. usd, eur, npr' }, { name: 'fxRate', type: 'number', label: 'Exchange rate', hint: 'Multiply bill amount by this to get the Stripe amount (1 if same currency)' }], test: true },
-  { group: 'qr', title: 'Fonepay / Bank QR', icon: 'qr', section: 'payments', desc: 'Show your static merchant QR at checkout. Confirm manually, or automatically via the signed webhook below.',
+  { group: 'qr', steps: ["Photograph your Fonepay / bank QR sticker.", "Upload the picture here (or paste the text inside the QR) and press Save.", "At checkout the customer scans it; press Confirm once the money shows in your bank app."], title: 'Fonepay / Bank QR', icon: 'qr', section: 'payments', desc: 'Show your static merchant QR at checkout. Confirm manually, or automatically via the signed webhook below.',
     fields: [{ name: 'enabled', type: 'toggle', label: 'Enabled' }, { name: 'label', label: 'Button label' }, { name: 'payload', label: 'QR text (decoded from your merchant QR)' }, { name: 'imageUrl', type: 'image', label: 'Or upload the QR picture' }] },
-  { group: 'card', title: 'Card terminal', icon: 'receipt', section: 'payments', desc: 'Record card payments taken on a separate terminal.',
+  { group: 'card', steps: ["Tick Enabled and press Save.", "At checkout, choose Card after the customer has paid on your card machine."], title: 'Card terminal', icon: 'receipt', section: 'payments', desc: 'Record card payments taken on a separate terminal.',
     fields: [{ name: 'enabled', type: 'toggle', label: 'Enabled' }, { name: 'label', label: 'Button label' }] },
-  { group: 'genericWebhook', title: 'Payment notification webhook', icon: 'bell', section: 'payments', desc: 'Any service (bank SMS forwarder, Zapier, n8n, your own script) can confirm a payment by POSTing a signed JSON body.',
+  { group: 'genericWebhook', steps: ["Only needed if a bank SMS forwarder or automation tool should confirm QR payments for you.", "Press Generate secret and give it to that tool, with the address shown below."], title: 'Payment notification webhook', icon: 'bell', section: 'payments', desc: 'Any service (bank SMS forwarder, Zapier, n8n, your own script) can confirm a payment by POSTing a signed JSON body.',
     fields: [{ name: 'enabled', type: 'toggle', label: 'Accept signed notifications' }], test: true, extra: webhookExtra },
-  { group: 'ird', title: 'IRD Nepal (CBMS)', icon: 'shield', section: 'tax', desc: 'Report each paid bill to the Central Billing Monitoring System; void bills send a credit note. Starts in dry-run.',
+  { group: 'ird', steps: ["Easiest: Overview › IRD › Set up IRD walks you through this card.", "Get your CBMS username and password from your accountant or IRD.", "Keep Dry run on, press Save, then Preview payload to see what would be sent.", "When your accountant agrees, turn Dry run off. The tick turns green after the first bill reaches IRD."], title: 'IRD Nepal (CBMS)', icon: 'shield', section: 'tax', desc: 'Report each paid bill to the Central Billing Monitoring System; void bills send a credit note. Starts in dry-run.',
     fields: [{ name: 'enabled', type: 'toggle', label: 'IRD registration enabled' }, { name: 'autoSync', type: 'toggle', label: 'Sync automatically when a bill is paid' },
       { name: 'dryRun', type: 'toggle', label: 'Dry run (build payloads, send nothing)' }, { name: 'sellerPan', label: 'Seller PAN' }, { name: 'username', label: 'CBMS username' },
       { name: 'password', type: 'secret', label: 'CBMS password' }, { name: 'billUrl', label: 'Bill endpoint' }, { name: 'returnUrl', label: 'Bill-return endpoint' }], test: true, testLabel: 'Preview payload' },
-  { group: 'google', title: 'Google Calendar', icon: 'calendar', section: 'apps', desc: 'Use your own OAuth client. See upcoming events on Overview, post day-close summaries, optionally log every sale.',
+  { group: 'google', steps: ["In Google Cloud Console create an OAuth client (Web application) — the redirect address is shown below.", "Paste the client ID and secret here and press Save.", "Press Connect Google Calendar and allow access."], title: 'Google Calendar', icon: 'calendar', section: 'apps', desc: 'Use your own OAuth client. See upcoming events on Overview, post day-close summaries, optionally log every sale.',
     fields: [{ name: 'clientId', label: 'OAuth client ID' }, { name: 'clientSecret', type: 'secret', label: 'OAuth client secret' }, { name: 'calendarId', label: 'Calendar ID', hint: '"primary" or a calendar\'s ID' },
       { name: 'logSales', type: 'toggle', label: 'Add every paid sale as an event' }], extra: googleExtra },
-  { group: 'ai', title: 'AI Copilot', icon: 'sparkles', section: 'apps', desc: 'Bring your own Anthropic API key for the copilot and the AI feature builder. The key stays on this PC.',
+  { group: 'ai', steps: ["Create an API key at console.anthropic.com (needs a payment method there).", "Paste it here, press Save, then Test.", "Open the Copilot with the ✨ button at the top."], title: 'AI Copilot', icon: 'sparkles', section: 'apps', desc: 'Bring your own Anthropic API key for the copilot and the AI feature builder. The key stays on this PC.',
     fields: [{ name: 'apiKey', type: 'secret', label: 'Anthropic API key' }, { name: 'model', label: 'Model', hint: 'Leave as it is unless you need a different model' },
       { name: 'effort', type: 'select', label: 'Effort', options: ['low', 'medium', 'high', 'xhigh', 'max'], hint: 'Higher = more thorough, slower, more tokens' }], test: true },
-  { group: 'printer', title: 'Receipt printer', icon: 'printer', section: 'devices', desc: 'Print receipts automatically and open the cash drawer on cash sales.',
+  { group: 'printer', steps: ["Choose how the printer is connected.", "Network printer: type its IP address (hold the feed button while switching it on to print it). USB: type the printer's name as it appears on this computer.", "Press Save, then Test print."], title: 'Receipt printer', icon: 'printer', section: 'devices', desc: 'Print receipts automatically and open the cash drawer on cash sales.',
     fields: [{ name: 'mode', type: 'select', label: 'Connection', options: ['browser', 'network', 'system'], hint: 'browser = print dialog · network = LAN printer (IP, port 9100) · system = USB printer queue' },
       { name: 'host', label: 'Printer IP (network)', hint: 'Local network only, e.g. 192.168.1.50' }, { name: 'port', type: 'number', label: 'Port (network)' },
       { name: 'queue', label: 'Printer / share name (system)', hint: 'macOS/Linux: printer name from lpstat · Windows: share the printer and enter its share name' },
@@ -38,9 +38,9 @@ const SPECS = [
       { name: 'paper', type: 'select', label: 'Browser receipt width (mm)', options: ['80', '58'] },
       { name: 'autoPrint', type: 'toggle', label: 'Print automatically after each paid sale' }, { name: 'openDrawer', type: 'toggle', label: 'Open the cash drawer on cash sales' },
       { name: 'printQr', type: 'toggle', label: 'Print e-bill QR (needs Public URL)' }, { name: 'copies', type: 'number', label: 'Copies' }], extra: printerExtra },
-  { group: 'scanner', title: 'Barcode scanner', icon: 'qr', section: 'devices', desc: 'USB/Bluetooth scanners work anywhere on the sell screen. The camera button scans with a webcam (Chrome/Edge).',
+  { group: 'scanner', steps: ["Plug in a USB scanner — nothing else to set up.", "On the Sell screen, scan any product barcode to try it."], title: 'Barcode scanner', icon: 'qr', section: 'devices', desc: 'USB/Bluetooth scanners work anywhere on the sell screen. The camera button scans with a webcam (Chrome/Edge).',
     fields: [{ name: 'beep', type: 'toggle', label: 'Beep on scan' }, { name: 'minLength', type: 'number', label: 'Shortest barcode length' }, { name: 'maxGapMs', type: 'number', label: 'Max ms between scanner keystrokes', hint: 'Raise if scans are missed; lower if fast typing is mistaken for a scan' }], extra: scannerExtra },
-  { group: 'telegram', title: 'Telegram alerts', icon: 'send', section: 'apps', desc: 'Get a message on your phone for every paid sale.',
+  { group: 'telegram', steps: ["In Telegram, message @BotFather, send /newbot and copy the token it gives you.", "Send any message to your new bot, then get your chat ID from @userinfobot.", "Paste both, tick Enabled, press Save, then Test."], title: 'Telegram alerts', icon: 'send', section: 'apps', desc: 'Get a message on your phone for every paid sale.',
     fields: [{ name: 'enabled', type: 'toggle', label: 'Enabled' }, { name: 'botToken', type: 'secret', label: 'Bot token (from @BotFather)' }, { name: 'chatId', label: 'Chat ID' }, { name: 'notifyPaid', type: 'toggle', label: 'Notify on paid sales' }], test: true },
 ];
 
@@ -58,6 +58,12 @@ export function renderConnectors(root, { sub = 'payments', params } = {}) {
   if (params?.get('google') === 'denied') toast('Google access was denied', 'warn');
   const settings = getState().boot.settings;
   const cards = sub === 'developer' ? [apiKeysCard(), outboundCard()] : SPECS.filter((s) => s.section === sub).map((s) => connectorCard(s, settings[s.group]));
+  get('/api/connectors/proven').then((p) => {
+    for (const el of root.querySelectorAll('[data-proof]')) {
+      const at = p[el.dataset.proof];
+      el.replaceChildren(at ? badge(`✓ Working — confirmed ${new Date(at).toLocaleDateString()}`, 'ok') : '');
+    }
+  }).catch(() => {});
   root.replaceChildren(h('div.connectors',
     h('p.lead', INTRO[sub] || ''),
     h(`div.conn-grid${sub === 'developer' ? '.wide' : ''}`, cards),
@@ -102,8 +108,10 @@ function connectorCard(spec, cfg) {
       else toast(r.reply ? `Connected — model says "${r.reply}"` : r.note || 'Test passed', 'success', 5000);
     } catch (e) { errorToast(e); }
   };
+  const proofKey = { genericWebhook: 'qr' }[spec.group] || spec.group;
   return h('article.conn-card',
-    h('header.conn-head', h('div.conn-icon', icon(spec.icon, 22)), h('div', h('h3', spec.title), h('p.muted', spec.desc)), status),
+    h('header.conn-head', h('div.conn-icon', icon(spec.icon, 22)), h('div', h('h3', spec.title), h('p.muted', spec.desc), h('div', { 'data-proof': proofKey })), status),
+    spec.steps ? h('details.conn-steps', { open: !isOn(spec, cfg) }, h('summary', 'How to set it up'), h('ol', spec.steps.map((x) => h('li', x)))) : null,
     form, spec.extra ? spec.extra(cfg) : null,
     h('footer.conn-actions', spec.test ? h('button.btn', { type: 'button', onclick: test }, spec.testLabel || 'Test') : null, h('button.btn.primary', { type: 'button', onclick: save }, 'Save')));
 }

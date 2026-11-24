@@ -7,7 +7,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { db } from '../db.js';
 import { config } from '../config.js';
 import { badRequest, notFound, log } from '../lib.js';
-import { getGroup } from './settings.js';
+import os from 'node:os';
+import { getGroup, setGroup } from './settings.js';
 import { append as appendLedger } from '../security/ledger.js';
 import { notify } from '../bus.js';
 
@@ -97,9 +98,84 @@ export function startBackupSchedule() {
       if (!cfg.auto) return;
       const last = listBackups().find((b) => b.reason === 'auto');
       const due = !last || Date.now() - Date.parse(last.created) >= Math.max(1, cfg.everyHours) * 3600_000;
-      if (due) createBackup('auto');
+      if (due) {
+        const b = createBackup('auto');
+        if (cfg.externalDir) { try { copyOut(b.name, cfg.externalDir); } catch (e) { notify({ type: 'backup.external_failed', level: 'warn', title: 'Could not copy the backup to your backup folder', body: `${e.message} — check Settings › Data.` }); } }
+      }
     } catch (e) { log.warn('auto backup failed', { err: e.message }); }
   };
   setTimeout(tick, 15_000).unref?.();
   setInterval(tick, 3600_000).unref?.();
+}
+
+// ---------- copies off this computer (USB stick, external disk, synced folder) ----------
+
+const OUT_DIR = 'FreeAIPOS-backups';
+
+/** Drives and folders a backup can be copied to: USB sticks / external disks, best effort per OS. */
+export function listDrives() {
+  const out = [];
+  const add = (p, label) => {
+    try {
+      const st = fs.statSync(p);
+      if (!st.isDirectory()) return;
+      fs.accessSync(p, fs.constants.W_OK);
+      let free = null; try { const f = fs.statfsSync(p); free = f.bavail * f.bsize; } catch { /* unknown */ }
+      out.push({ path: p, label: label || path.basename(p) || p, free });
+    } catch { /* not writable / not mounted */ }
+  };
+  if (process.platform === 'win32') {
+    const sys = (process.env.SystemDrive || 'C:').toUpperCase();
+    for (const l of 'DEFGHIJKLMNOPQRSTUVWXYZ') if (`${l}:` !== sys) add(`${l}:\\`, `Drive ${l}:`);
+  } else if (process.platform === 'darwin') {
+    try { for (const v of fs.readdirSync('/Volumes')) { const p = path.join('/Volumes', v); try { if (fs.realpathSync(p) !== '/') add(p, v); } catch { /* skip */ } } } catch { /* none */ }
+  } else {
+    const user = os.userInfo().username;
+    for (const base of [`/media/${user}`, `/run/media/${user}`, '/media', '/mnt']) {
+      try { for (const v of fs.readdirSync(base)) { if (v === user) continue; add(path.join(base, v), v); } } catch { /* none */ }
+    }
+  }
+  return out;
+}
+
+function checkFolder(dir) {
+  const d = String(dir || '').trim();
+  if (!d || !path.isAbsolute(d)) throw badRequest('Choose a drive or type a full folder path');
+  if (!fs.existsSync(d) || !fs.statSync(d).isDirectory()) throw badRequest('That drive or folder is not there — is the USB stick plugged in?');
+  const real = fs.realpathSync(d);
+  if (real.startsWith(fs.realpathSync(config.root)) || real.startsWith(path.resolve(config.dataDir))) throw badRequest('Pick a place outside the POS folder (a USB stick, another disk or a synced folder)');
+  return real;
+}
+
+function copyOut(name, dir) {
+  const target = path.join(checkFolder(dir), OUT_DIR);
+  fs.mkdirSync(target, { recursive: true });
+  fs.copyFileSync(backupPath(name), path.join(target, name));
+  // Keep the newest 10 copies on the drive.
+  const mine = fs.readdirSync(target).filter((f) => NAME.test(f)).sort().reverse();
+  for (const f of mine.slice(10)) fs.rmSync(path.join(target, f), { force: true });
+  const at = new Date().toISOString();
+  setGroup('backup', { lastExternalAt: at });
+  appendLedger('backup.copied', name, { to: 'external' });
+  return { ok: true, folder: target, name, at };
+}
+
+/** Make a fresh backup and copy it to a USB stick / folder. */
+export function backupTo(dir) {
+  checkFolder(dir);
+  const b = createBackup('manual');
+  return copyOut(b.name, dir);
+}
+
+/** Days since the last copy off this computer (null = never). */
+export function externalAge() {
+  const at = getGroup('backup').lastExternalAt;
+  return at ? Math.floor((Date.now() - Date.parse(at)) / 86_400_000) : null;
+}
+
+export function reminder() {
+  const cfg = getGroup('backup');
+  const days = externalAge();
+  const due = days === null ? listBackups().length > 0 || Number(db.prepare('SELECT COUNT(*) AS n FROM sales').get().n) > 0 : days >= (Number(cfg.remindDays) || 7);
+  return { due, days, remindDays: Number(cfg.remindDays) || 7 };
 }

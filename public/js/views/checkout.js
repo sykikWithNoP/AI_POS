@@ -1,6 +1,7 @@
 // Checkout: one modal that turns a cart into a sale, collects one or more payments
 // (cash / card / QR / eSewa / Khalti / Stripe) and waits for verification events.
 import { h, icon, money, toMinor, toMajor, toast, errorToast, modal, chime } from '../ui.js';
+import { showPaid } from '../display-link.js';
 import { dispatch, getState } from '../store.js';
 import { get, post } from '../api.js';
 import { quickTenders } from '/shared/billing.js';
@@ -181,6 +182,7 @@ export function openCheckout(cart, totals, { sale: existing } = {}) {
     watching = null;
     chime('ok');
     emitExt('sale:complete', sale);
+    showPaid({ shop: getState().boot.settings.business.name, total: money(sale.total), change: sale.change_due ? money(sale.change_due) : null });
     const link = `${getState().boot.baseUrl}/b/${sale.public_token}`;
     body.replaceChildren(h('div.success',
       h('div.big-check', icon('check', 48)),
@@ -189,7 +191,7 @@ export function openCheckout(cart, totals, { sale: existing } = {}) {
       h('p.muted', `${sale.invoice_no} · ${sale.payment_method}`),
       h('div.row-actions',
         h('button.btn', { onclick: () => printReceipt(sale) }, icon('printer', 16), 'Print receipt'),
-        h('button.btn', { onclick: () => { navigator.clipboard?.writeText(link); toast('Bill link copied', 'success'); } }, icon('link', 16), 'Copy e-bill link'),
+        h('button.btn', { onclick: () => navigator.clipboard.writeText(link).then(() => toast('Bill link copied', 'success'), () => modal({ title: 'Copy this link', body: h('pre.code.select', link) })) }, icon('link', 16), 'Copy e-bill link'),
         h('button.btn.primary', { onclick: () => m.close() }, icon('plus', 16), 'New sale (Enter)'))));
     const onEnter = (e) => { if (e.key === 'Enter') { document.removeEventListener('keydown', onEnter); m.close(); } };
     setTimeout(() => document.addEventListener('keydown', onEnter), 300);

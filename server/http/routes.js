@@ -13,6 +13,8 @@ import { append as appendLedger, verify as verifyLedger, recent as ledgerRecent 
 import { toCsv, parseCsv } from './csv.js';
 import { sseHandler, listNotifications, markAllRead } from '../bus.js';
 import * as settings from '../services/settings.js';
+import * as drafts from '../services/drafts.js';
+import * as onboarding from '../services/onboarding.js';
 import * as items from '../services/items.js';
 import * as sales from '../services/sales.js';
 import * as payments from '../services/payments.js';
@@ -31,6 +33,7 @@ import * as stock from '../services/stock.js';
 import * as reports from '../services/reports.js';
 import * as backups from '../services/backups.js';
 import * as updates from '../services/updates.js';
+import * as system from '../services/system.js';
 import * as printer from '../services/printer.js';
 import * as migrate from '../services/migrate.js';
 import * as agent from '../services/agent.js';
@@ -104,6 +107,15 @@ export function apiRouter() {
   r.post('/auth/drop', owner, (req, res) => { dropElevation(req); res.json({ ok: true }); });
   r.post('/auth/pin', owner, (req, res) => res.json(changePin(req, res, req.body || {})));
 
+  // First-run welcome wizard (owner).
+  r.get('/onboarding/samples', ownerRead, (req, res) => res.json(onboarding.sampleItems(String(req.query.type || 'shop'))));
+  r.post('/onboarding', ownerOnly, (req, res) => res.json(onboarding.complete(req.body || {})));
+  r.post('/onboarding/skip', ownerOnly, (req, res) => res.json(onboarding.skip()));
+
+  // Open bills mirror (till level: same people who can sell).
+  r.get('/drafts', owner, (req, res) => res.json(drafts.getDrafts()));
+  r.put('/drafts', owner, (req, res) => res.json(drafts.saveDrafts(req.body)));
+
   r.get('/bootstrap', owner, (req, res) => res.json({
     settings: isOwner(req) ? settings.publicSettings() : settings.tillSettings(),
     ownerSignedIn: isOwner(req),
@@ -115,6 +127,8 @@ export function apiRouter() {
     customTheme: (() => { const t = settings.getGroup('ui').theme; try { return t.startsWith('custom:') ? themes.getTheme(t.slice(7)) : null; } catch { return null; } })(),
     shift: shifts.currentShift(),
     baseUrl: baseUrl(req),
+    welcome: isOwner(req) && onboarding.needsWelcome(),
+    backupReminder: isOwner(req) ? backups.reminder() : null,
   }));
 
   r.get('/events', owner, sseHandler);
@@ -249,6 +263,7 @@ export function apiRouter() {
     const patch = {};
     if (v.theme !== undefined) patch.theme = v.theme;
     if (v.sound !== undefined) patch.sound = v.sound;
+    if (v.touchMode !== undefined) patch.touchMode = !!v.touchMode;
     settings.setGroup('ui', patch);
     res.json(settings.publicGroup('ui'));
   });
@@ -281,6 +296,14 @@ export function apiRouter() {
     res.json(settings.publicGroup(group));
   });
 
+  // "Proven" = a real payment through this connector has been confirmed (shown as a green tick).
+  r.get('/connectors/proven', ownerRead, (req, res) => {
+    const out = {};
+    for (const row of db.prepare("SELECT method, MAX(COALESCE(verified_at, created_at)) AS at FROM payments WHERE status = 'verified' GROUP BY method").all()) out[row.method] = row.at;
+    const ird = db.prepare("SELECT MAX(created_at) AS at FROM sales WHERE ird_status = 'synced'").get();
+    if (ird?.at && !settings.getGroup('ird').dryRun) out.ird = ird.at;
+    res.json(out);
+  });
   r.post('/connectors/:name/test', ownerRead, async (req, res) => {
     const n = req.params.name;
     if (n === 'ai') return res.json(await ai.testKey());
@@ -379,7 +402,9 @@ export function apiRouter() {
 
   // ---------- backups, restore, updates (owner area) ----------
   const rawBody = express.raw({ type: () => true, limit: '300mb' });
-  r.get('/backups', ownerRead, (req, res) => res.json({ backups: backups.listBackups(), restorePending: backups.restorePending(), settings: settings.getGroup('backup') }));
+  r.get('/backups', ownerRead, (req, res) => res.json({ backups: backups.listBackups(), restorePending: backups.restorePending(), settings: settings.getGroup('backup'), reminder: backups.reminder() }));
+  r.get('/backups/drives', ownerRead, (req, res) => res.json(backups.listDrives()));
+  r.post('/backups/copy', pin, (req, res) => res.json(backups.backupTo(req.body?.folder)));
   r.post('/backups', ownerOnly, (req, res) => res.status(201).json(backups.createBackup('manual')));
   r.get('/backups/:name', ownerRead, (req, res) => res.download(backups.backupPath(req.params.name)));
   r.post('/backups/:name/restore', ownerOnly, (req, res) => res.json(backups.stageRestore({ name: req.params.name })));
@@ -389,6 +414,11 @@ export function apiRouter() {
   r.post('/updates/upload', ownerOnly, rawBody, (req, res) => res.json(updates.stageUpdate(req.body)));
   r.post('/updates/rollback', ownerOnly, (req, res) => res.json(updates.requestRollback(req.body?.to)));
   r.post('/system/restart', ownerOnly, (req, res) => res.json(updates.restart()));
+  r.post('/updates/check', ownerOnly, async (req, res) => res.json(await updates.checkForUpdate()));
+  r.post('/updates/install-downloaded', ownerOnly, (req, res) => res.json(updates.installDownloaded()));
+  r.get('/system/autostart', ownerRead, (req, res) => res.json(system.autostartStatus()));
+  r.put('/system/autostart', ownerOnly, (req, res) => res.json(system.setAutostart(!!req.body?.enabled)));
+  r.post('/system/shutdown', ownerOnly, (req, res) => res.json(system.shutdown()));
 
   r.get('/backup.db', ownerOnly, (req, res) => {
     const file = path.join(os.tmpdir(), `pos-backup-${Date.now()}.db`);

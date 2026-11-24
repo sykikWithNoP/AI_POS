@@ -224,6 +224,13 @@ CREATE TABLE IF NOT EXISTS themes (
   created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
+-- Open (unpaid, not yet charged) bills, mirrored from the till so they survive a browser reset.
+CREATE TABLE IF NOT EXISTS drafts (
+  id          TEXT PRIMARY KEY,
+  data        TEXT NOT NULL,
+  updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
 CREATE TABLE IF NOT EXISTS notifications (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   type        TEXT NOT NULL,

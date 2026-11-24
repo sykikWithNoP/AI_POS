@@ -101,5 +101,6 @@ if (isMain) {
   });
   import('./services/ird.js').then((m) => m.startRetryQueue());
   import('./services/backups.js').then((m) => m.startBackupSchedule());
+  import('./services/updates.js').then((m) => m.startUpdateChecks());
   setInterval(() => pollPending().catch((e) => log.warn('poll failed', { err: e.message })), config.verifyIntervalMs).unref();
 }

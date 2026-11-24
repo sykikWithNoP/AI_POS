@@ -1,11 +1,13 @@
 // App shell: auth gate, four-item navigation, router, notifications bell, copilot.
 import { h, icon, errorToast, fmtDate, toast, modal } from './ui.js';
-import { get, post, setPinPrompt } from './api.js';
-import { dispatch, getState, subscribe } from './store.js';
+import { get, post, put, setPinPrompt } from './api.js';
+import { dispatch, getState, subscribe, localDraftsSavedAt } from './store.js';
 import { connectLive } from './live.js';
 import { loadExtensions, emitExt } from './extensions.js';
 import { applyTheme } from './theme.js';
 import { toggleCopilot } from './copilot.js';
+import { runWelcome, sellTour } from './welcome.js';
+import { toggleHelp } from './help.js';
 import { OWNER_AREAS, renderOwnerGate, showOwnerKey, ownerSignOut } from './owner.js';
 import { renderPos, loadItems } from './views/pos.js';
 import { renderOverview } from './views/overview.js';
@@ -30,14 +32,39 @@ async function start() {
   const boot = await get('/api/bootstrap');
   dispatch({ type: 'boot', boot });
   applyTheme(boot.settings.ui.theme, boot.customTheme);
+  document.body.classList.toggle('touch', !!boot.settings.ui.touchMode);
   loadExtensions(boot.extensions);
   await loadItems();
+  await syncDrafts();
   dispatch({ type: 'notifications', list: await get('/api/notifications') });
   renderShell();
   connectLive();
   checkIntegrity();
   window.addEventListener('hashchange', route);
   route();
+  if (boot.welcome) {
+    const next = await runWelcome(boot);
+    await loadItems();
+    if (next === 'import') location.hash = '#/settings/data';
+    else if (next === 'tour') { location.hash = '#/pos/sell'; setTimeout(sellTour, 400); }
+    else route();
+  }
+}
+
+/** Restore open bills from the POS if its copy is newer than this browser's, then keep it mirrored. */
+async function syncDrafts() {
+  try {
+    const remote = await get('/api/drafts');
+    const hasLocal = getState().sessions.some((x) => x.cart.lines.length);
+    if (remote?.sessions?.length && (!hasLocal || (remote.savedAt || '') > localDraftsSavedAt())) dispatch({ type: 'sessions/restore', sessions: remote.sessions, active: remote.active });
+  } catch { /* not fatal: the browser copy still works */ }
+  let t = null;
+  const push = () => put('/api/drafts', { sessions: getState().sessions, active: getState().active }).catch(() => {});
+  subscribe((s, prev) => {
+    if (s.sessions === prev.sessions && s.active === prev.active) return;
+    clearTimeout(t); t = setTimeout(push, 800);
+  });
+  window.addEventListener('pagehide', () => { if (t) { clearTimeout(t); push(); } });
 }
 
 function pinInput(label = 'PIN') {
@@ -155,6 +182,7 @@ function renderShell() {
     h('div.top-actions',
       clock,
       h('button.icon-btn.bell', { 'aria-label': 'Notifications', onclick: bellPanel }, icon('bell', 20), bellCount),
+      h('button.icon-btn.help-btn', { 'aria-label': 'Help for this page', title: 'Help (F1)', onclick: toggleHelp }, h('b.help-q', '?')),
       h('button.icon-btn', { 'aria-label': 'AI copilot', title: 'AI copilot', onclick: toggleCopilot }, icon('sparkles', 20)),
       h('button.btn.sm.owner-chip', { onclick: () => (getState().boot.ownerSignedIn ? ownerSignOut() : (location.hash = href('overview'))) }),
       h('button.icon-btn', { 'aria-label': 'Lock', title: 'Lock (drop PIN access)', onclick: async () => { await post('/api/auth/logout'); location.reload(); } }, icon('lock', 20))));
@@ -176,10 +204,11 @@ function renderShell() {
   drawBell();
   subscribe((s, prev) => {
     if (s.notifications !== prev.notifications) drawBell();
-    if (s.boot !== prev.boot) { document.querySelector('.brand-name').textContent = s.boot.settings.business.name; drawOwner(); }
+    if (s.boot !== prev.boot) { document.querySelector('.brand-name').textContent = s.boot.settings.business.name; drawOwner(); document.body.classList.toggle('touch', !!s.boot.settings.ui.touchMode); }
   });
 
   document.addEventListener('keydown', (e) => {
+    if (e.key === 'F1') { e.preventDefault(); toggleHelp(); }
     if (e.altKey && /^[1-4]$/.test(e.key)) { e.preventDefault(); location.hash = href(NAV[Number(e.key) - 1].id); }
     // Alt+[ / Alt+] step through the sub-pages of the current page.
     if (e.altKey && (e.key === '[' || e.key === ']')) {

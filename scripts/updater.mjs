@@ -7,7 +7,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-export const APP_FILES = ['server.mjs', 'launcher.mjs', 'updater.mjs', 'package.json', 'LICENSE', 'integrity.json', 'public'];
+export const APP_FILES = ['server.mjs', 'launcher.mjs', 'updater.mjs', 'desktop.mjs', 'package.json', 'LICENSE', 'USER-GUIDE.md', 'integrity.json', 'public'];
 const U = (root, ...p) => path.join(root, '.update', ...p);
 const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; } };
 const currentVersion = (root) => readJson(path.join(root, 'package.json'))?.version || '0.0.0';

@@ -16,7 +16,7 @@ export const config = {
   verifyIntervalMs: Number(process.env.VERIFY_INTERVAL_MS || 5000),
   // Refuse to start if app files differ from the sealed manifest. Default on in release builds.
   strictIntegrity: process.env.POS_STRICT_INTEGRITY ? process.env.POS_STRICT_INTEGRITY === '1' : BUNDLED,
-  codeDirs: BUNDLED ? ['server.mjs', 'launcher.mjs', 'updater.mjs', 'public'] : ['server', 'shared', 'public'],
+  codeDirs: BUNDLED ? ['server.mjs', 'launcher.mjs', 'updater.mjs', 'desktop.mjs', 'public'] : ['server', 'shared', 'public'],
 };
 
 export const isLoopbackHost = (h) => ['127.0.0.1', 'localhost', '::1'].includes(h);

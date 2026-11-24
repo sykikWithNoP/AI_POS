@@ -5,6 +5,7 @@ import { get } from '../api.js';
 import { calculateBill } from '/shared/billing.js';
 import { cartForExtensions as cartForExt, emitExt, ruleDiscounts, extensionButtons, clickExtensionButton, onRulesUpdate, settleRules, checkBeforeSale } from '../extensions.js';
 import { openCheckout } from './checkout.js';
+import { showCart, openCustomerDisplay } from '../display-link.js';
 import { renderItemsManager } from './items.js';
 import { renderCustomers, pickCustomerDialog } from './customers.js';
 import { shiftChip } from './shift.js';
@@ -71,7 +72,8 @@ function renderSell(root) {
     h('button.btn.member-btn', { onclick: membershipAction, title: 'Sell or manage a membership' }, '★', 'Membership'),
     h('button.btn', { onclick: addOpenItem }, icon('plus', 16), 'Custom item'),
     h('button.btn', { onclick: () => discountDialog(getState().cart.cartDiscount, (d) => dispatch({ type: 'cart/discount', discount: d })) }, icon('tag', 16), 'Discount'),
-    h('button.btn', { onclick: () => import('./shift.js').then((m) => m.drawerDialog()) }, icon('wallet', 16), 'Cash drawer'));
+    h('button.btn', { onclick: () => import('./shift.js').then((m) => m.drawerDialog()) }, icon('wallet', 16), 'Cash drawer'),
+    h('button.btn', { title: 'Open a window for a screen facing the customer', onclick: () => { if (!openCustomerDisplay()) toast('Allow pop-ups for the POS to open the customer screen', 'warn'); } }, icon('grid', 16), 'Customer screen'));
   const left = h('section.catalog', toolbar, chips, grid, actionBar);
   const right = h('aside.cart', { 'aria-label': 'Current bill' }, memberSearch(), tabs, cartBox);
   root.append(h('div.sell', left, right));
@@ -273,6 +275,13 @@ function drawCart(box) {
   const { cart } = getState();
   const t = cartTotals(cart);
   const c = cart.customer || {};
+  const { tax: taxCfg, business } = getState().boot.settings;
+  showCart({
+    shop: business.name,
+    lines: cart.lines.map((l) => { const calc = t.lines.find((x) => x.key === l.key); return { qty: l.qty, name: l.name, total: money(calc ? calc.gross - calc.lineDiscount : l.unitPrice * l.qty) }; }),
+    rows: [['Subtotal', money(t.subtotal)], ...(t.discount > 0 ? [['Discount', `−${money(t.discount)}`]] : []), ...(t.tax > 0 ? [[taxCfg.label, money(t.tax)]] : [])],
+    total: money(t.total), member: t.member ? `${t.member.name} member — ${t.member.percent}% off` : null,
+  });
 
   const lines = cart.lines.length ? h('ul.lines', cart.lines.map((l) => {
     const calc = t.lines.find((x) => x.key === l.key);

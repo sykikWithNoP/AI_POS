@@ -96,8 +96,8 @@ function sendNetwork(host, port, data) {
   return new Promise((resolve, reject) => {
     const sock = net.createConnection({ host, port: Number(port) || 9100, timeout: 5000 }, () => sock.end(data));
     sock.on('close', (hadErr) => (hadErr ? null : resolve()));
-    sock.on('timeout', () => { sock.destroy(); reject(new HttpError(504, `Printer at ${host} did not answer`, 'printer_timeout')); });
-    sock.on('error', (e) => reject(new HttpError(502, `Printer error: ${e.code || e.message}`, 'printer_error')));
+    sock.on('timeout', () => { sock.destroy(); reject(new HttpError(504, `Printer at ${host} did not answer. Check it is switched on, has paper and is on the same Wi-Fi/network, then try Connectors › Devices › Test print.`, 'printer_timeout')); });
+    sock.on('error', (e) => reject(new HttpError(502, e.code === 'ECONNREFUSED' || e.code === 'EHOSTUNREACH' ? `Can't reach the printer at ${host}. Check its IP address (print a self-test page by holding the feed button while switching it on) and the port (usually 9100).` : `Printer error: ${e.code || e.message}. Switch the printer off and on, then press Test print.`, 'printer_error')));
   });
 }
 
@@ -105,7 +105,7 @@ function sendSystem(queue, data) {
   if (!/^[A-Za-z0-9 _.-]{1,64}$/.test(String(queue || ''))) throw badRequest('Printer name may only contain letters, numbers, spaces, dot, dash and underscore');
   const tmp = path.join(os.tmpdir(), `pos-receipt-${process.pid}-${Date.now()}.bin`);
   fs.writeFileSync(tmp, data);
-  const done = (resolve, reject) => (err) => { fs.rm(tmp, { force: true }, () => {}); err ? reject(new HttpError(502, `Printing failed: ${err.message}`, 'printer_error')) : resolve(); };
+  const done = (resolve, reject) => (err) => { fs.rm(tmp, { force: true }, () => {}); err ? reject(new HttpError(502, `Printing failed: ${err.message}. Check the printer name in Connectors › Devices matches the printer on this computer (Windows: the printer must be shared).`, 'printer_error')) : resolve(); };
   return new Promise((resolve, reject) => {
     if (process.platform === 'win32') execFile('cmd.exe', ['/d', '/c', 'copy', '/b', tmp, `\\\\localhost\\${queue}`], { windowsHide: true, timeout: 15000 }, done(resolve, reject));
     else execFile('lp', ['-d', queue, '-o', 'raw', tmp], { timeout: 15000 }, done(resolve, reject));
@@ -116,7 +116,7 @@ async function send(data) {
   const p = getGroup('printer');
   if (p.mode === 'network') return sendNetwork(p.host, p.port, data);
   if (p.mode === 'system') return sendSystem(p.queue, data);
-  throw badRequest('Receipt printer is set to "browser" — use the Print button instead');
+  throw badRequest('Receipts print through the browser\'s print window. To print straight to a receipt printer, choose "network" or "system" in Connectors › Devices.');
 }
 
 export async function printSale(saleId, { openDrawer = false, baseUrl } = {}) {

@@ -13,7 +13,7 @@ export const DEFAULTS = {
   tax: { rate: 13, inclusive: false, serviceChargeRate: 0, label: 'VAT' },
   // Owner PIN is mandatory (set on first run). lockScreen also requires it to open the dashboard.
   security: { pinHash: '', lockScreen: false, elevateMinutes: 10, ownerUser: '', ownerPassHash: '', ownerKeyHash: '', ownerIdleMinutes: 30 },
-  ui: { theme: 'system', sound: true, compactGrid: false },
+  ui: { theme: 'system', sound: true, compactGrid: false, touchMode: false },
   esewa: { enabled: false, sandbox: true, productCode: 'EPAYTEST', secretKey: '' },
   khalti: { enabled: false, sandbox: true, secretKey: '' },
   stripe: { enabled: false, secretKey: '', webhookSecret: '', currency: 'usd', fxRate: 1 },
@@ -35,7 +35,10 @@ export const DEFAULTS = {
   checkout: { allowPostpone: false, postponeRequiresCustomer: true, defaultDueDays: 7, maxDiscountPercent: 20 },
   memberships: { defaultPlanId: 0 },
   privacy: { offline: false },
-  backup: { auto: true, everyHours: 24, keep: 14 },
+  backup: { auto: true, everyHours: 24, keep: 14, externalDir: '', lastExternalAt: '', remindDays: 7 },
+  onboarding: { done: false, businessType: 'shop' },
+  updates: { autoCheck: false, manifestUrl: '', lastCheckAt: '', latestVersion: '', latestNotes: '' },
+  system: { autostart: false },
   printer: { mode: 'browser', host: '', port: 9100, queue: '', width: 48, autoPrint: false, openDrawer: true, printQr: true, copies: 1, paper: '80' },
   scanner: { beep: true, minLength: 4, maxGapMs: 35 },
 };

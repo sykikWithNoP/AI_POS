@@ -26,6 +26,7 @@ function connectors() {
     google: { on: !!(g('google').clientId), hosts: ['oauth2.googleapis.com', 'www.googleapis.com'], secrets: ['clientSecret', 'refreshToken'] },
     ai: { on: !!g('ai').apiKey, hosts: ['api.anthropic.com'], secrets: ['apiKey'] },
     telegram: { on: g('telegram').enabled || !!g('telegram').botToken, hosts: ['api.telegram.org'], secrets: ['botToken'] },
+    updates: { on: g('updates').autoCheck && !!g('updates').manifestUrl, hosts: [hostOf(g('updates').manifestUrl)].filter(Boolean), secrets: [] },
   };
 }
 

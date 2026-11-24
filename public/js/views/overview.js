@@ -52,6 +52,7 @@ async function load(box, actions) {
   box.replaceChildren(
     h('div.snapshot', ['day', 'month', 'year'].map((p) => h(`button.snap${period === p && offset === 0 ? '.active' : ''}`, { onclick: () => setPeriod(p) },
       h('span.snap-label', PERIOD_LABEL[p], snap[p].label !== PERIOD_LABEL[p] ? h('small.muted', ` · ${snap[p].label}`) : null), h('b.snap-value', money(snap[p].revenue)), h('small.muted', `${snap[p].bills} bills`)))),
+    backupNudge(),
     periodBar(o, redraw),
     h('div.kpis',
       kpi('Net revenue', money(k.revenue), (delta === null ? `No sales ${vs}` : `${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta)}% vs ${vs}`) + (k.refunds ? ` · refunds ${money(k.refunds)}` : ''), delta === null ? '' : delta >= 0 ? 'up' : 'down'),
@@ -222,4 +223,13 @@ function refundDialog(s, refresh) {
 async function copyText(text) {
   try { await navigator.clipboard.writeText(text); toast('Link copied', 'success'); }
   catch { modal({ title: 'Copy this link', body: h('pre.code.select', text) }); }
+}
+
+/** Weekly nudge to copy a backup off this computer. */
+function backupNudge() {
+  const r = getState().boot.backupReminder;
+  if (!r?.due) return null;
+  return h('div.nudge', icon('download', 18),
+    h('span', r.days === null ? 'You have never copied a backup off this computer. ' : `Your last backup copy off this computer was ${r.days} days ago. `, 'If the computer breaks, that copy is how you get everything back.'),
+    h('a.btn.sm.primary', { href: '#/settings/data' }, 'Back up to USB'));
 }

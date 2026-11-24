@@ -41,21 +41,25 @@ await build({
   outdir: path.join(dist, 'public/js'), bundle: true, splitting: true, format: 'esm', target: 'es2022',
   minify: true, sourcemap: false, legalComments: 'none', plugins: [sharedAlias], banner: { js: NOTICE }, logLevel: 'warning',
 });
-for (const css of ['app.css', 'bill.css']) {
+for (const css of ['app.css', 'bill.css', 'guide.css', 'display.css']) {
   fs.mkdirSync(path.join(dist, 'public/css'), { recursive: true });
   const out = await transform(fs.readFileSync(path.join(root, 'public/css', css), 'utf8'), { loader: 'css', minify: true });
   fs.writeFileSync(path.join(dist, 'public/css', css), out.code);
 }
 fs.writeFileSync(path.join(dist, 'public/js/theme-boot.js'), (await transform(fs.readFileSync(path.join(root, 'public/js/theme-boot.js'), 'utf8'), { minify: true })).code);
+// Customer display: its own tiny page (not part of the app bundle).
+fs.writeFileSync(path.join(dist, 'public/js/display.js'), NOTICE + (await transform(fs.readFileSync(path.join(root, 'public/js/display.js'), 'utf8'), { minify: true, legalComments: 'none' })).code);
+fs.writeFileSync(path.join(dist, 'public/display.html'), fs.readFileSync(path.join(root, 'public/display.html'), 'utf8').replace(/\n\s*/g, ''));
 fs.writeFileSync(path.join(dist, 'public/index.html'), fs.readFileSync(path.join(root, 'public/index.html'), 'utf8').replace(/\n\s*/g, ''));
 
 // 4. Launcher files.
 fs.writeFileSync(path.join(dist, 'package.json'), JSON.stringify({ name: 'free-ai-pos', version: pkg.version, private: true, type: 'module', license: 'UNLICENSED', engines: { node: '>=22.5' }, scripts: { start: 'node launcher.mjs', 'reset-owner': 'node --no-warnings=ExperimentalWarning server.mjs --reset-owner' } }, null, 2));
 fs.copyFileSync(path.join(root, 'LICENSE'), path.join(dist, 'LICENSE'));
-for (const f of ['launcher.mjs', 'updater.mjs']) fs.copyFileSync(path.join(root, 'scripts', f), path.join(dist, f));
+fs.copyFileSync(path.join(root, 'USER-GUIDE.md'), path.join(dist, 'USER-GUIDE.md'));
+for (const f of ['launcher.mjs', 'updater.mjs', 'desktop.mjs']) fs.copyFileSync(path.join(root, 'scripts', f), path.join(dist, f));
 
 // 5. Seal.
-const m = seal(dist, ['server.mjs', 'launcher.mjs', 'updater.mjs', 'public']);
+const m = seal(dist, ['server.mjs', 'launcher.mjs', 'updater.mjs', 'desktop.mjs', 'public']);
 const size = (f) => (fs.statSync(path.join(dist, f)).size / 1024).toFixed(0);
 console.log(`dist/ ${pkg.version} ready · server.mjs ${size('server.mjs')} KB · ${Object.keys(m.files).length} files sealed`);
 
@@ -70,7 +74,7 @@ if (!PUBKEY || !fs.existsSync(privFile)) {
     if (fs.statSync(abs).isDirectory()) { for (const x of fs.readdirSync(abs).sort()) walk(path.posix.join(rel, x)); return; }
     files.push({ name: rel, data: fs.readFileSync(abs) });
   };
-  for (const f of ['server.mjs', 'launcher.mjs', 'updater.mjs', 'package.json', 'LICENSE', 'integrity.json', 'public']) walk(f);
+  for (const f of ['server.mjs', 'launcher.mjs', 'updater.mjs', 'desktop.mjs', 'package.json', 'LICENSE', 'USER-GUIDE.md', 'integrity.json', 'public']) walk(f);
   const manifest = Buffer.from(JSON.stringify({
     app: 'free-ai-pos', version: pkg.version, createdAt: new Date().toISOString(), notes: process.env.POS_RELEASE_NOTES || '',
     files: Object.fromEntries(files.map((f) => [f.name, crypto.createHash('sha256').update(f.data).digest('hex')])),

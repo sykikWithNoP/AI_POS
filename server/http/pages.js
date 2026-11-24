@@ -9,6 +9,9 @@ import * as payments from '../services/payments.js';
 import { decodeReturn } from '../providers/esewa.js';
 import { formatMoney } from '../../shared/billing.js';
 import { baseUrl } from './routes.js';
+import path from 'node:path';
+import { config } from '../config.js';
+import { renderMarkdown } from '../util/markdown.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -22,6 +25,16 @@ export function pagesRouter() {
 
   // Extension sandbox. Loaded in <iframe sandbox="allow-scripts"> (opaque origin: no cookies, storage or
   // parent DOM). Its CSP forbids every network request, so extension code cannot exfiltrate anything.
+  // Built-in user guide (plain language), rendered from USER-GUIDE.md shipped with the app.
+  r.get('/guide', (req, res) => {
+    let md = '# User guide\n\nThe guide file is missing from this installation.';
+    try { md = fs.readFileSync(path.join(config.root, 'USER-GUIDE.md'), 'utf8'); } catch { /* keep fallback */ }
+    res.set('Cache-Control', 'no-cache');
+    res.type('html').send(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>User guide — Free AI POS</title><meta name="robots" content="noindex,nofollow,noai,noimageai"><link rel="stylesheet" href="/css/guide.css"></head>
+<body><nav class="top"><a href="/">← Back to the till</a></nav><main class="guide">${renderMarkdown(md)}</main></body></html>`);
+  });
+
   r.get('/sandbox.html', (req, res) => {
     const nonce = crypto.randomBytes(16).toString('base64');
     res.set({

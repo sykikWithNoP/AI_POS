@@ -71,6 +71,12 @@ function reducer(s, a) {
       return { ...s, sessions, active, cart: sessions.find((x) => x.id === active).cart };
     }
     case 'session/rename': return { ...s, sessions: s.sessions.map((x) => (x.id === a.id ? { ...x, label: String(a.label).slice(0, 24) || x.label } : x)) };
+    case 'sessions/restore': {
+      if (!a.sessions?.length) return s;
+      const sessions = a.sessions.map((x) => ({ ...x, cart: { ...emptyCart(), ...x.cart } }));
+      const active = sessions.find((x) => x.id === a.active) || sessions[0];
+      return { ...s, sessions, active: active.id, cart: active.cart };
+    }
     case 'notifications': return { ...s, notifications: a.list };
     case 'notification/add': return { ...s, notifications: [a.n, ...s.notifications].slice(0, 50) };
     default: return s;
@@ -91,9 +97,12 @@ export function dispatch(action) {
 export function subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 
 // Keep open sessions across reloads (this browser only).
+// Open bills are kept in this browser and mirrored to the POS itself (see syncDrafts in app.js),
+// so they survive a reload, a restart, a cleared browser or switching to the desktop window.
 function persist() {
-  try { localStorage.setItem('pos.sessions', JSON.stringify({ sessions: state.sessions, active: state.active })); } catch { /* storage unavailable */ }
+  try { localStorage.setItem('pos.sessions', JSON.stringify({ sessions: state.sessions, active: state.active, savedAt: new Date().toISOString() })); } catch { /* storage unavailable */ }
 }
+export const localDraftsSavedAt = () => { try { return JSON.parse(localStorage.getItem('pos.sessions') || 'null')?.savedAt || ''; } catch { return ''; } };
 try {
   const saved = JSON.parse(localStorage.getItem('pos.sessions') || 'null');
   if (saved?.sessions?.length) {

@@ -44,7 +44,7 @@ const PAGES = {
   security: () => [securityCard(), integrityCard(), privacyCard()],
   extensions: () => [extensionsCard()],
   data: () => [migrationCard(), backupCard()],
-  updates: () => [updatesCard()],
+  updates: () => [updatesCard(), systemCard()],
 };
 
 export function renderSettings(root, { sub = 'business' } = {}) {
@@ -257,14 +257,48 @@ function backupCard() {
   load().catch(errorToast);
   return h('section.card',
     h('header.card-head', h('h3', icon('download', 18), 'Backups & restore'), h('button.btn.sm.primary', { onclick: async () => { try { await post('/api/backups'); toast('Backup made', 'success'); load(); } catch (e) { errorToast(e); } } }, 'Back up now')),
-    h('p.hint', 'Automatic backups are kept on this PC (data/backups). For safety off the PC, copy a downloaded backup to a USB stick. Keep data/secret.key with it — it unlocks saved keys.'),
+    h('p.hint', 'Automatic backups are kept on this computer. Copy one to a USB stick every week (below).'),
     status,
     h('div.form-grid.two', h('label.toggle', auto, h('span.track'), h('span', 'Automatic backups')), field('How often', every), field('Keep how many', keep),
       h('div', h('button.btn', { style: { marginTop: '22px' }, onclick: async () => {
         try { await put('/api/settings/backup', { values: { auto: auto.checked, everyHours: Number(every.value), keep: Number(keep.value) } }); toast('Saved', 'success'); } catch (e) { errorToast(e); }
       } }, 'Save'))),
+    h('h4', 'Copy off this computer'), usbBox(),
     h('h4', 'Backups on this PC'), list,
     h('h4', 'Restore from a file'), h('label.btn', icon('upload', 16), 'Choose backup file…', upload));
+}
+
+/** USB stick / external disk / synced folder: one button, plus an optional automatic copy. */
+function usbBox() {
+  const drives = h('select.input', { 'aria-label': 'Drive' });
+  const folder = h('input.input', { placeholder: 'or type a folder, e.g. D:\\Backups or /Volumes/USB', 'aria-label': 'Backup folder' });
+  const autoCopy = h('input', { type: 'checkbox' });
+  const age = h('p.hint');
+  const target = () => folder.value.trim() || drives.value;
+  const refresh = async () => {
+    const [list, b] = await Promise.all([get('/api/backups/drives'), get('/api/backups')]);
+    drives.replaceChildren(...(list.length ? list.map((d) => h('option', { value: d.path }, `${d.label}${d.free != null ? ` — ${(d.free / 1e9).toFixed(1)} GB free` : ''}`)) : [h('option', { value: '' }, 'No USB stick or extra drive found — plug one in and press Refresh')]));
+    autoCopy.checked = !!b.settings.externalDir;
+    if (b.settings.externalDir) folder.value = b.settings.externalDir;
+    const r = b.reminder;
+    age.replaceChildren(r.days === null ? 'No copy has been made off this computer yet.' : `Last copy off this computer: ${r.days === 0 ? 'today' : `${r.days} day${r.days === 1 ? '' : 's'} ago`}.`, r.due ? h('b.warn-text', ' Time for a new one.') : '');
+  };
+  refresh().catch(errorToast);
+  return h('div.usb-box',
+    h('p.hint', 'If this computer breaks or is stolen, a copy on a USB stick is how you get everything back. Do it once a week. Saved connector keys are not copied (for safety) — you would type them again.'),
+    age,
+    h('div.row-actions', drives, h('button.btn.sm', { type: 'button', onclick: () => refresh().catch(errorToast) }, icon('refresh', 14), 'Refresh')),
+    folder,
+    h('label.toggle', autoCopy, h('span.track'), h('span', 'Also copy every automatic backup here', h('small.muted', ' — good for an always-connected disk or a OneDrive/Google Drive folder'))),
+    h('div.row-actions',
+      h('button.btn.primary', { type: 'button', onclick: async () => {
+        if (!target()) return toast('Plug in a USB stick and press Refresh, or type a folder', 'warn');
+        try {
+          const r = await post('/api/backups/copy', { folder: target() });
+          await put('/api/settings/backup', { values: { externalDir: autoCopy.checked ? target() : '' } });
+          toast(`Backup copied to ${r.folder}`, 'success', 6000); refresh();
+        } catch (e) { errorToast(e); }
+      } }, icon('download', 16), 'Back up to USB / folder')));
 }
 
 async function restartNow() {
@@ -286,7 +320,28 @@ function updatesCard() {
       u.rollbackTo.length ? h('div.row-actions', h('span.muted', 'Roll back to:'), ...u.rollbackTo.map((v) => h('button.btn.sm', { onclick: async () => {
         if (!(await confirmDialog(`Go back to version ${v}? Your data is backed up first.`, { okLabel: 'Roll back', danger: true }))) return;
         try { await post('/api/updates/rollback', { to: v }); toast('Rollback ready', 'success'); await restartNow(); } catch (e) { errorToast(e); }
-      } }, v))) : null);
+      } }, v))) : null,
+      u.downloaded && !u.pending ? h('div.integrity.ok', icon('download', 18), h('div', h('b', `Version ${u.downloaded} is downloaded and verified. `), u.check.latestNotes ? `${u.check.latestNotes} ` : '',
+        h('button.btn.sm.primary', { onclick: async () => { try { await post('/api/updates/install-downloaded'); await restartNow(); } catch (e) { errorToast(e); } } }, 'Install & restart'))) : null,
+      checkBox(u));
+  };
+  const checkBox = (u) => {
+    const on = h('input', { type: 'checkbox', checked: !!u.check.autoCheck });
+    const url = h('input.input', { type: 'url', value: u.check.manifestUrl || '', placeholder: 'https://raw.githubusercontent.com/you/your-repo/main/updates/latest.json' });
+    return h('div.form-grid',
+      h('h4', 'Check for updates automatically'),
+      h('p.hint', 'Off by default. When on, the POS asks one address of your choice — and nothing else — once a day. A new version is downloaded and its signature checked; you still choose when to install. Last check: ', u.check.lastCheckAt ? `${new Date(u.check.lastCheckAt).toLocaleString()} (latest ${u.check.latestVersion})` : 'never', '.'),
+      h('label.toggle', on, h('span.track'), h('span', 'Check once a day')),
+      field('Update address (latest.json)', url),
+      h('div.row-actions',
+        h('button.btn', { onclick: async () => { try { await put('/api/settings/updates', { values: { autoCheck: on.checked, manifestUrl: url.value.trim() } }); toast('Saved', 'success'); } catch (e) { errorToast(e); } } }, 'Save'),
+        h('button.btn', { onclick: async () => {
+          try {
+            await put('/api/settings/updates', { values: { autoCheck: on.checked, manifestUrl: url.value.trim() } });
+            const r = await post('/api/updates/check');
+            toast(r.available ? `Version ${r.latest} downloaded and verified` : `You have the latest version (${r.current})`, r.available ? 'success' : 'info', 6000); load();
+          } catch (e) { errorToast(e); }
+        } }, icon('refresh', 14), 'Check now')));
   };
   file.addEventListener('change', async () => {
     const f = file.files[0];
@@ -302,8 +357,28 @@ function updatesCard() {
   load().catch(errorToast);
   return h('section.card',
     h('header.card-head', h('h3', icon('upload', 18), 'Updates')),
-    h('p.hint', 'Install a new version from a signed .posupdate file (USB stick or download you trust). Nothing is fetched from the internet. Only files signed with your update key are accepted; your data is backed up first, the previous version is kept, and a version that fails to start is rolled back automatically.'),
-    box, h('label.btn.primary', icon('upload', 16), 'Install update file…', file));
+    h('p.hint', 'Install a new version from a signed .posupdate file. Only files signed with your update key are accepted; your data is backed up first, the previous version is kept, and a version that fails to start is rolled back automatically.'),
+    h('label.btn.primary', icon('upload', 16), 'Install update file…', file), box);
+}
+
+/** Start with the computer + shut down. */
+function systemCard() {
+  const auto = h('input', { type: 'checkbox' });
+  const where = h('small.muted');
+  get('/api/system/autostart').then((r) => { auto.checked = r.enabled; where.textContent = r.enabled ? ` — added to ${r.where}` : ''; }).catch(errorToast);
+  auto.addEventListener('change', async () => {
+    try { const r = await put('/api/system/autostart', { enabled: auto.checked }); where.textContent = r.enabled ? ` — added to ${r.where}` : ''; toast(r.enabled ? 'The POS will start when this computer starts' : 'Turned off', 'success'); } catch (e) { auto.checked = !auto.checked; errorToast(e); }
+  });
+  return h('section.card',
+    h('header.card-head', h('h3', icon('gear', 18), 'This computer')),
+    h('label.toggle', auto, h('span.track'), h('span', 'Start the POS when this computer starts', where)),
+    h('p.hint', 'It starts quietly in the background; open it from the desktop icon or the bookmark. Nothing is installed system-wide.'),
+    h('div.row-actions',
+      h('button.btn', { onclick: restartNow }, icon('refresh', 16), 'Restart the POS'),
+      h('button.btn.danger', { onclick: async () => {
+        if (!(await confirmDialog('Shut down the POS? Open bills are kept. Start it again from the desktop icon.', { okLabel: 'Shut down', danger: true }))) return;
+        try { await post('/api/system/shutdown'); document.body.replaceChildren(h('main.login', h('div.login-card', h('h1', 'The POS is shut down'), h('p', 'Start it again from the Free AI POS icon.')))); } catch (e) { errorToast(e); }
+      } }, 'Shut down the POS')));
 }
 
 // ---------- Memberships: tiers, default tier, and per-customer tier assignment ----------
@@ -399,6 +474,11 @@ function appearanceCard() {
   const grid = h('div.theme-grid');
   const sound = h('input', { type: 'checkbox', checked: getState().boot.settings.ui.sound !== false });
   sound.addEventListener('change', () => put('/api/settings/ui', { values: { sound: sound.checked } }).catch(errorToast));
+  const touch = h('input', { type: 'checkbox', checked: !!getState().boot.settings.ui.touchMode });
+  touch.addEventListener('change', async () => {
+    document.body.classList.toggle('touch', touch.checked);
+    try { await put('/api/settings/ui', { values: { touchMode: touch.checked } }); dispatch({ type: 'boot', boot: await get('/api/bootstrap') }); } catch (e) { errorToast(e); }
+  });
 
   const preview = (attrs, label, extra) => h('div.tt-preview', attrs, h('div.tt-nav', h('i'), h('i'), h('i'), h('i')),
     h('div.tt-body', h('div.tt-card', h('b'), h('span')), h('div.tt-row', h('i'), h('i'), h('i')), extra || null));
@@ -443,7 +523,7 @@ function appearanceCard() {
   }
   draw();
   return h('section.card',
-    h('header.card-head', h('h3', icon('moon', 18), 'Appearance'), h('label.toggle', sound, h('span.track'), h('span', 'Payment chime'))),
+    h('header.card-head', h('h3', icon('moon', 18), 'Appearance'), h('div.row-actions', h('label.toggle', touch, h('span.track'), h('span', 'Touch mode (bigger buttons)')), h('label.toggle', sound, h('span.track'), h('span', 'Payment chime')))),
     h('p.hint', 'Pick one of 15 themes, or create your own from a picture — the POS reads its colours, picks a readable accent, and can show the picture behind the screens.'),
     grid);
 }

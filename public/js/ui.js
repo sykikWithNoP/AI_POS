@@ -2,6 +2,13 @@ import { icon } from './icons.js';
 import { getState } from './store.js';
 import { formatMoney, toMinor, toMajor } from '/shared/billing.js';
 
+// Views pass optional pieces as `cond ? el : null`. The DOM would print those as the text "null",
+// so replaceChildren/append/prepend skip null, undefined and false everywhere in the app.
+for (const name of ['replaceChildren', 'append', 'prepend']) {
+  const orig = Element.prototype[name];
+  Element.prototype[name] = function (...nodes) { return orig.apply(this, nodes.filter((n) => n !== null && n !== undefined && n !== false)); };
+}
+
 /** Tiny hyperscript: h('div.card#id', { onclick, class, style, ... }, children...) */
 export function h(sel, props, ...children) {
   if (props === null || typeof props !== 'object' || props instanceof Node || Array.isArray(props)) { children.unshift(props); props = {}; }
