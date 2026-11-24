@@ -15,7 +15,9 @@
     "build": "node scripts/build.js",
     "reset-owner": "node --no-warnings=ExperimentalWarning server/index.js --reset-owner",
     "server": "node --no-warnings=ExperimentalWarning server/index.js",
-    "keygen": "node scripts/keygen.js"
+    "keygen": "node scripts/keygen.js",
+    "vendor": "node scripts/vendor.js",
+    "setup": "node -e \"console.log('Use ./install.sh (macOS/Linux) or install.bat (Windows)')\""
   },
   "license": "UNLICENSED",
   "dependencies": {

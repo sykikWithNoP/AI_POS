@@ -1,8 +1,34 @@
-node_modules/
-data/
+# Runtime modules ARE committed (node_modules) so the POS runs without `npm install`.
+# These parts are not: build-only tools (platform-specific binaries) and files never used at runtime.
+node_modules/.bin/
+node_modules/esbuild/
+node_modules/@esbuild/
+node_modules/**/*.map
+node_modules/**/*.d.ts
+node_modules/**/*.d.mts
+node_modules/**/*.d.cts
+node_modules/**/*.md
+!node_modules/**/[Ll][Ii][Cc][Ee][Nn][SsCc][Ee]*
+!node_modules/**/[Nn][Oo][Tt][Ii][Cc][Ee]*
+node_modules/@anthropic-ai/sdk/src/
+node_modules/.package-lock.json
+node_modules/**/.github/
+node_modules/**/docs/
+node_modules/**/doc/
+node_modules/**/test/
+node_modules/**/tests/
+node_modules/**/__tests__/
+node_modules/**/example/
+node_modules/**/examples/
+node_modules/**/benchmark/
+node_modules/**/benchmarks/
+node_modules/**/coverage/
+
+# Your data, keys and builds never go into git
+/data/
 *.db
 *.db-*
-.env
-dist/
-updates/
-.update/
+/.env
+/dist/
+/updates/
+/.update/

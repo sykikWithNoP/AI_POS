@@ -4,13 +4,13 @@
 
 A self-hosted point-of-sale system for a shop owner's own PC. It runs on localhost, needs no build step and no cloud account, and works with keys you supply yourself (BYOK) for payments, IRD, Google Calendar, Telegram and AI.
 
-```bash
-npm install
-```
+Everything it needs except Node.js is already in this repository (the runtime modules are committed), so there is nothing to `npm install`. Install **Node.js 22.5+**, then:
 
-```bash
-npm start
-```
+- **Windows:** double-click `install.bat`, then `start.bat`
+- **macOS / Linux:** `./install.sh`, then `./start.sh`
+- **Any OS:** `npm start`
+
+Full requirements and options: [INSTALL.md](INSTALL.md).
 
 Then open http://localhost:4321. The first-run screen creates the **till PIN** and the **owner account** (username, password and a generated **Owner Key** — save it). `npm start` runs the POS through a small launcher that restarts it when a restore or update needs it. Data lives in `./data` (SQLite + the key that encrypts your saved secrets and signs the ledger).
 
